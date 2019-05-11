@@ -6465,7 +6465,7 @@ static void __vmx_vcpu_run(struct kvm_vcpu *vcpu, struct vcpu_vmx *vmx)
 		"xor %%edi, %%edi \n\t"
 		"xor %%ebp, %%ebp \n\t"
 		"pop  %%" _ASM_BP "; pop  %%" _ASM_DX " \n\t"
-	      : ASM_CALL_CONSTRAINT
+	      : ASM_CALL_CONSTRAINT, "=S"((int){0})
 	      : "c"(vmx), "d"((unsigned long)HOST_RSP), "S"(evmcs_rsp),
 		[launched]"i"(offsetof(struct vcpu_vmx, __launched)),
 		[fail]"i"(offsetof(struct vcpu_vmx, fail)),
@@ -6547,6 +6547,8 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	 * case. */
 	if (vcpu->guest_debug & KVM_GUESTDBG_SINGLESTEP)
 		vmx_set_interrupt_shadow(vcpu, 0);
+
+	kvm_load_guest_xcr0(vcpu);
 
 	if (static_cpu_has(X86_FEATURE_PKU) &&
 	    kvm_read_cr4_bits(vcpu, X86_CR4_PKE) &&
@@ -6634,6 +6636,8 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		if (vcpu->arch.pkru != vmx->host_pkru)
 			__write_pkru(vmx->host_pkru);
 	}
+
+	kvm_put_guest_xcr0(vcpu);
 
 	vmx->nested.nested_run_pending = 0;
 	vmx->idt_vectoring_info = 0;
@@ -7129,6 +7133,7 @@ static int vmx_set_hv_timer(struct kvm_vcpu *vcpu, u64 guest_deadline_tsc)
 {
 	struct vcpu_vmx *vmx;
 	u64 tscl, guest_tscl, delta_tsc, lapic_timer_advance_cycles;
+	struct kvm_timer *ktimer = &vcpu->arch.apic->lapic_timer;
 
 	if (kvm_mwait_in_guest(vcpu->kvm))
 		return -EOPNOTSUPP;
@@ -7137,7 +7142,8 @@ static int vmx_set_hv_timer(struct kvm_vcpu *vcpu, u64 guest_deadline_tsc)
 	tscl = rdtsc();
 	guest_tscl = kvm_read_l1_tsc(vcpu, tscl);
 	delta_tsc = max(guest_deadline_tsc, guest_tscl) - guest_tscl;
-	lapic_timer_advance_cycles = nsec_to_cycles(vcpu, lapic_timer_advance_ns);
+	lapic_timer_advance_cycles = nsec_to_cycles(vcpu,
+						    ktimer->timer_advance_ns);
 
 	if (delta_tsc > lapic_timer_advance_cycles)
 		delta_tsc -= lapic_timer_advance_cycles;
@@ -7522,6 +7528,11 @@ static int enable_smi_window(struct kvm_vcpu *vcpu)
 	return 0;
 }
 
+static bool vmx_need_emulation_on_page_fault(struct kvm_vcpu *vcpu)
+{
+	return 0;
+}
+
 static __init int hardware_setup(void)
 {
 	unsigned long host_bndcfgs;
@@ -7824,6 +7835,7 @@ static struct kvm_x86_ops vmx_x86_ops __ro_after_init = {
 	.set_nested_state = NULL,
 	.get_vmcs12_pages = NULL,
 	.nested_enable_evmcs = NULL,
+	.need_emulation_on_page_fault = vmx_need_emulation_on_page_fault,
 };
 
 static void vmx_cleanup_l1d_flush(void)
