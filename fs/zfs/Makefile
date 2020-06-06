@@ -46,20 +46,20 @@ modules_install:
 	$(MAKE) -C /scrap/linux-mdl-5.4 M=`pwd` $@ \
 		INSTALL_MOD_PATH=$(DESTDIR)$(INSTALL_MOD_PATH) \
 		INSTALL_MOD_DIR=$(INSTALL_MOD_DIR) \
-		KERNELRELEASE=5.4.28-mdl+
+		KERNELRELEASE=5.4.44-mdl+
 	@# Remove extraneous build products when packaging
-	kmoddir=$(DESTDIR)$(INSTALL_MOD_PATH)/lib/modules/5.4.28-mdl+; \
+	kmoddir=$(DESTDIR)$(INSTALL_MOD_PATH)/lib/modules/5.4.44-mdl+; \
 	if [ -n "$(DESTDIR)" ]; then \
 		find $$kmoddir -name 'modules.*' | xargs $(RM); \
 	fi
-	sysmap=$(DESTDIR)$(INSTALL_MOD_PATH)/boot/System.map-5.4.28-mdl+; \
+	sysmap=$(DESTDIR)$(INSTALL_MOD_PATH)/boot/System.map-5.4.44-mdl+; \
 	if [ -f $$sysmap ]; then \
-		depmod -ae -F $$sysmap 5.4.28-mdl+; \
+		depmod -ae -F $$sysmap 5.4.44-mdl+; \
 	fi
 
 modules_uninstall:
 	@# Uninstall the kernel modules
-	kmoddir=$(DESTDIR)$(INSTALL_MOD_PATH)/lib/modules/5.4.28-mdl+
+	kmoddir=$(DESTDIR)$(INSTALL_MOD_PATH)/lib/modules/5.4.44-mdl+
 	list='$(obj-m)'; for objdir in $$list; do \
 		$(RM) -R $$kmoddir/$(INSTALL_MOD_DIR)/$$objdir; \
 	done

@@ -841,7 +841,7 @@
 /* #undef ZFS_IS_GPL_COMPATIBLE */
 
 /* Define the project alias string. */
-#define ZFS_META_ALIAS "zfs-0.8.3-1"
+#define ZFS_META_ALIAS "zfs-0.8.4-1"
 
 /* Define the project author. */
 #define ZFS_META_AUTHOR "OpenZFS on Linux"
@@ -850,7 +850,7 @@
 /* #undef ZFS_META_DATA */
 
 /* Define the maximum compatible kernel version. */
-#define ZFS_META_KVER_MAX "5.4"
+#define ZFS_META_KVER_MAX "5.6"
 
 /* Define the minimum compatible kernel version. */
 #define ZFS_META_KVER_MIN "2.6.32"
@@ -874,5 +874,5 @@
 #define ZFS_META_RELEASE "1"
 
 /* Define the project version. */
-#define ZFS_META_VERSION "0.8.3"
+#define ZFS_META_VERSION "0.8.4"
 
