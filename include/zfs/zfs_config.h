@@ -143,6 +143,15 @@
 /* blkdev_reread_part() is available */
 #define HAVE_BLKDEV_REREAD_PART 1
 
+/* blkg_tryget() is available */
+/* #undef HAVE_BLKG_TRYGET */
+
+/* blkg_tryget() GPL-only */
+/* #undef HAVE_BLKG_TRYGET_GPL_ONLY */
+
+/* blk_alloc_queue() expects request function */
+/* #undef HAVE_BLK_ALLOC_QUEUE_REQUEST_FN */
+
 /* blk queue backing_dev_info is dynamic */
 #define HAVE_BLK_QUEUE_BDI_DYNAMIC 1
 
@@ -375,6 +384,9 @@
 /* inode->i_*time's are timespec64 */
 #define HAVE_INODE_TIMESPEC64_TIMES 1
 
+/* timestamp_truncate() exists */
+#define HAVE_INODE_TIMESTAMP_TRUNCATE 1
+
 /* iops->truncate_range() exists */
 /* #undef HAVE_INODE_TRUNCATE_RANGE */
 
@@ -437,6 +449,9 @@
 
 /* ktime_get_coarse_real_ts64() exists */
 #define HAVE_KTIME_GET_COARSE_REAL_TS64 1
+
+/* ktime_get_raw_ts64() exists */
+#define HAVE_KTIME_GET_RAW_TS64 1
 
 /* kuid_t/kgid_t in use */
 #define HAVE_KUIDGID_T 1
@@ -501,6 +516,9 @@
 /* Define to 1 if you have the `mlockall' function. */
 #define HAVE_MLOCKALL 1
 
+/* Define if host toolchain supports MOVBE */
+#define HAVE_MOVBE 1
+
 /* new_sync_read()/new_sync_write() are available */
 /* #undef HAVE_NEW_SYNC_READ */
 
@@ -545,6 +563,9 @@
 
 /* posix_acl_valid() wants user namespace */
 #define HAVE_POSIX_ACL_VALID_WITH_NS 1
+
+/* proc_ops structure exists */
+/* #undef HAVE_PROC_OPS_STRUCT */
 
 /* iops->put_link() cookie */
 /* #undef HAVE_PUT_LINK_COOKIE */

@@ -117,6 +117,7 @@ am__aclocal_m4_deps = $(top_srcdir)/config/always-arch.m4 \
 	$(top_srcdir)/config/kernel-bio-op.m4 \
 	$(top_srcdir)/config/kernel-bio-rw-barrier.m4 \
 	$(top_srcdir)/config/kernel-bio-rw-discard.m4 \
+	$(top_srcdir)/config/kernel-bio-tryget.m4 \
 	$(top_srcdir)/config/kernel-bio_set_dev.m4 \
 	$(top_srcdir)/config/kernel-blk-queue-bdi.m4 \
 	$(top_srcdir)/config/kernel-blk-queue-discard.m4 \
@@ -168,7 +169,7 @@ am__aclocal_m4_deps = $(top_srcdir)/config/always-arch.m4 \
 	$(top_srcdir)/config/kernel-kmap-atomic-args.m4 \
 	$(top_srcdir)/config/kernel-kmem-cache.m4 \
 	$(top_srcdir)/config/kernel-kstrtoul.m4 \
-	$(top_srcdir)/config/kernel-ktime_get_coarse_real_ts64.m4 \
+	$(top_srcdir)/config/kernel-ktime.m4 \
 	$(top_srcdir)/config/kernel-kuid-helpers.m4 \
 	$(top_srcdir)/config/kernel-kuidgid.m4 \
 	$(top_srcdir)/config/kernel-lookup-bdev.m4 \
@@ -181,6 +182,7 @@ am__aclocal_m4_deps = $(top_srcdir)/config/always-arch.m4 \
 	$(top_srcdir)/config/kernel-objtool.m4 \
 	$(top_srcdir)/config/kernel-open-bdev-exclusive.m4 \
 	$(top_srcdir)/config/kernel-pde-data.m4 \
+	$(top_srcdir)/config/kernel-proc-operations.m4 \
 	$(top_srcdir)/config/kernel-put-link.m4 \
 	$(top_srcdir)/config/kernel-rename.m4 \
 	$(top_srcdir)/config/kernel-rw.m4 \
@@ -446,10 +448,10 @@ OTOOL64 =
 PACKAGE = zfs
 PACKAGE_BUGREPORT = 
 PACKAGE_NAME = zfs
-PACKAGE_STRING = zfs 0.8.3
+PACKAGE_STRING = zfs 0.8.4
 PACKAGE_TARNAME = zfs
 PACKAGE_URL = 
-PACKAGE_VERSION = 0.8.3
+PACKAGE_VERSION = 0.8.4
 PATH_SEPARATOR = :
 PKG_CONFIG = /usr/bin/pkg-config
 PKG_CONFIG_LIBDIR = 
@@ -493,7 +495,7 @@ TARGET_ASM_DIR = asm-x86_64
 TEST_JOBS = 16
 USE_NLS = yes
 VENDOR = ubuntu
-VERSION = 0.8.3
+VERSION = 0.8.4
 XGETTEXT = /usr/bin/xgettext
 XGETTEXT_015 = /usr/bin/xgettext
 XGETTEXT_EXTRA_OPTIONS = 
