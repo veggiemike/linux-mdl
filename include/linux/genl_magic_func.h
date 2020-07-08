@@ -1,8 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef GENL_MAGIC_FUNC_H
 #define GENL_MAGIC_FUNC_H
 
-#include <linux/build_bug.h>
 #include <linux/genl_magic_struct.h>
 
 /*
@@ -23,7 +21,8 @@
 #define GENL_struct(tag_name, tag_number, s_name, s_fields)		\
 	[tag_name] = { .type = NLA_NESTED },
 
-static struct nla_policy CONCAT_(GENL_MAGIC_FAMILY, _tla_nl_policy)[] = {
+static struct nla_policy CONCAT_(GENL_MAGIC_FAMILY, _tla_nl_policy)[]	\
+		__attribute__((unused)) = {
 #include GENL_MAGIC_INCLUDE_FILE
 };
 
@@ -135,7 +134,6 @@ static struct nlattr *nested_attr_tb[128];
 
 #undef GENL_struct
 #define GENL_struct(tag_name, tag_number, s_name, s_fields)		\
-/* *_from_attrs functions are static, but potentially unused */		\
 static int __ ## s_name ## _from_attrs(struct s_name *s,		\
 		struct genl_info *info, bool exclude_invariants)	\
 {									\
@@ -209,7 +207,9 @@ static int s_name ## _from_attrs_for_change(struct s_name *s,		\
  * Magic: define op number to op name mapping				{{{1
  *									{{{2
  */
-const char *CONCAT_(GENL_MAGIC_FAMILY, _genl_cmd_to_str)(__u8 cmd)
+static const char *CONCAT_(GENL_MAGIC_FAMILY, _genl_cmd_to_str)(__u8 cmd)
+__attribute__ ((unused));
+static const char *CONCAT_(GENL_MAGIC_FAMILY, _genl_cmd_to_str)(__u8 cmd)
 {
 	switch (cmd) {
 #undef GENL_op
@@ -250,63 +250,49 @@ static struct genl_ops ZZZ_genl_ops[] __read_mostly = {
  */
 #define ZZZ_genl_family		CONCAT_(GENL_MAGIC_FAMILY, _genl_family)
 static struct genl_family ZZZ_genl_family;
+
 /*
  * Magic: define multicast groups
  * Magic: define multicast group registration helper
  */
-#define ZZZ_genl_mcgrps		CONCAT_(GENL_MAGIC_FAMILY, _genl_mcgrps)
-static const struct genl_multicast_group ZZZ_genl_mcgrps[] = {
-#undef GENL_mc_group
-#define GENL_mc_group(group) { .name = #group, },
-#include GENL_MAGIC_INCLUDE_FILE
-};
 
-enum CONCAT_(GENL_MAGIC_FAMILY, group_ids) {
-#undef GENL_mc_group
-#define GENL_mc_group(group) CONCAT_(GENL_MAGIC_FAMILY, _group_ ## group),
-#include GENL_MAGIC_INCLUDE_FILE
-};
+/* COMPAT
+ * See linux 3.13,
+ * genetlink: make multicast groups const, prevent abuse
+ * genetlink: pass family to functions using groups
+ * genetlink: only pass array to genl_register_family_with_ops()
+ * which are commits c53ed742..2a94fe48
+ *
+ * v4.10, 489111e5 genetlink: statically initialize families
+ *   and previous commit drop GENL_ID_GENERATE and register helper functions.
+ */
+#if defined(genl_register_family_with_ops_groups) || !defined(GENL_ID_GENERATE)
+#include <linux/genl_magic_func-genl_register_family_with_ops_groups.h>
+#else
+#include <linux/genl_magic_func-genl_register_mc_group.h>
+#endif
 
-#undef GENL_mc_group
-#define GENL_mc_group(group)						\
-static int CONCAT_(GENL_MAGIC_FAMILY, _genl_multicast_ ## group)(	\
-	struct sk_buff *skb, gfp_t flags)				\
-{									\
-	unsigned int group_id =						\
-		CONCAT_(GENL_MAGIC_FAMILY, _group_ ## group);		\
-	return genlmsg_multicast(&ZZZ_genl_family, skb, 0,		\
-				 group_id, flags);			\
-}
-
-#include GENL_MAGIC_INCLUDE_FILE
-
-#undef GENL_mc_group
-#define GENL_mc_group(group)
-
-static struct genl_family ZZZ_genl_family __ro_after_init = {
+static struct genl_family ZZZ_genl_family __read_mostly = {
+	/* .id = GENL_ID_GENERATE, which exists no longer, and was 0 anyways */
 	.name = __stringify(GENL_MAGIC_FAMILY),
 	.version = GENL_MAGIC_VERSION,
 #ifdef GENL_MAGIC_FAMILY_HDRSZ
 	.hdrsize = NLA_ALIGN(GENL_MAGIC_FAMILY_HDRSZ),
 #endif
 	.maxattr = ARRAY_SIZE(CONCAT_(GENL_MAGIC_FAMILY, _tla_nl_policy))-1,
-	.policy	= CONCAT_(GENL_MAGIC_FAMILY, _tla_nl_policy),
+
+#ifndef GENL_ID_GENERATE
 	.ops = ZZZ_genl_ops,
 	.n_ops = ARRAY_SIZE(ZZZ_genl_ops),
 	.mcgrps = ZZZ_genl_mcgrps,
 	.n_mcgrps = ARRAY_SIZE(ZZZ_genl_mcgrps),
 	.module = THIS_MODULE,
+#endif
+#ifdef COMPAT_HAVE_GENL_FAMILY_PARALLEL_OPS
+	.parallel_ops = true,
+#endif
+	.policy = CONCAT_(GENL_MAGIC_FAMILY, _tla_nl_policy),
 };
-
-int CONCAT_(GENL_MAGIC_FAMILY, _genl_register)(void)
-{
-	return genl_register_family(&ZZZ_genl_family);
-}
-
-void CONCAT_(GENL_MAGIC_FAMILY, _genl_unregister)(void)
-{
-	genl_unregister_family(&ZZZ_genl_family);
-}
 
 /*
  * Magic: provide conversion functions					{{{1

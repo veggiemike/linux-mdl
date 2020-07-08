@@ -1,7 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0
-#include <asm/bug.h>
-#include <linux/rbtree_augmented.h>
 #include "drbd_interval.h"
+#include "drbd_wrappers.h"
 
 /**
  * interval_end  -  return end of @node
@@ -13,10 +11,32 @@ sector_t interval_end(struct rb_node *node)
 	return this->end;
 }
 
-#define NODE_END(node) ((node)->sector + ((node)->size >> 9))
+/**
+ * update_interval_end  -  recompute end of @node
+ *
+ * The end of an interval is the highest (start + (size >> 9)) value of this
+ * node and of its children.  Called for @node and its parents whenever the end
+ * may have changed.
+ */
+static void
+update_interval_end(struct rb_node *node, void *__unused)
+{
+	struct drbd_interval *this = rb_entry(node, struct drbd_interval, rb);
+	sector_t end;
 
-RB_DECLARE_CALLBACKS_MAX(static, augment_callbacks,
-			 struct drbd_interval, rb, sector_t, end, NODE_END);
+	end = this->sector + (this->size >> 9);
+	if (node->rb_left) {
+		sector_t left = interval_end(node->rb_left);
+		if (left > end)
+			end = left;
+	}
+	if (node->rb_right) {
+		sector_t right = interval_end(node->rb_right);
+		if (right > end)
+			end = right;
+	}
+	this->end = end;
+}
 
 /**
  * drbd_insert_interval  -  insert a new interval into a tree
@@ -25,7 +45,6 @@ bool
 drbd_insert_interval(struct rb_root *root, struct drbd_interval *this)
 {
 	struct rb_node **new = &root->rb_node, *parent = NULL;
-	sector_t this_end = this->sector + (this->size >> 9);
 
 	BUG_ON(!IS_ALIGNED(this->size, 512));
 
@@ -34,8 +53,6 @@ drbd_insert_interval(struct rb_root *root, struct drbd_interval *this)
 			rb_entry(*new, struct drbd_interval, rb);
 
 		parent = *new;
-		if (here->end < this_end)
-			here->end = this_end;
 		if (this->sector < here->sector)
 			new = &(*new)->rb_left;
 		else if (this->sector > here->sector)
@@ -48,16 +65,16 @@ drbd_insert_interval(struct rb_root *root, struct drbd_interval *this)
 			return false;
 	}
 
-	this->end = this_end;
 	rb_link_node(&this->rb, parent, new);
-	rb_insert_augmented(&this->rb, root, &augment_callbacks);
+	rb_insert_color(&this->rb, root);
+	rb_augment_insert(&this->rb, update_interval_end, NULL);
 	return true;
 }
 
 /**
  * drbd_contains_interval  -  check if a tree contains a given interval
  * @sector:	start sector of @interval
- * @interval:	may not be a valid pointer
+ * @interval:	may be an invalid pointer
  *
  * Returns if the tree contains the node @interval with start sector @start.
  * Does not dereference @interval until @interval is known to be a valid object
@@ -94,7 +111,15 @@ drbd_contains_interval(struct rb_root *root, sector_t sector,
 void
 drbd_remove_interval(struct rb_root *root, struct drbd_interval *this)
 {
-	rb_erase_augmented(&this->rb, root, &augment_callbacks);
+	struct rb_node *deepest;
+
+	/* avoid endless loop */
+	if (drbd_interval_empty(this))
+		return;
+
+	deepest = rb_augment_erase_begin(&this->rb);
+	rb_erase(&this->rb, root);
+	rb_augment_erase_end(deepest, update_interval_end, NULL);
 }
 
 /**

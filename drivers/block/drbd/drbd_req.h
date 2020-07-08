@@ -92,7 +92,7 @@ enum drbd_req_event {
 	RECV_ACKED_BY_PEER,
 	WRITE_ACKED_BY_PEER,
 	WRITE_ACKED_BY_PEER_AND_SIS, /* and set_in_sync */
-	CONFLICT_RESOLVED,
+	DISCARD_WRITE,
 	POSTPONE_WRITE,
 	NEG_ACKED,
 	BARRIER_ACKED, /* in protocol A and B */
@@ -108,7 +108,7 @@ enum drbd_req_event {
 	ABORT_DISK_IO,
 	RESEND,
 	FAIL_FROZEN_DISK_IO,
-	RESTART_FROZEN_DISK_IO,
+	COMPLETION_RESUMED,
 	NOTHING,
 };
 
@@ -118,21 +118,7 @@ enum drbd_req_event {
  * same time, so we should hold the request lock anyways.
  */
 enum drbd_req_state_bits {
-	/* 3210
-	 * 0000: no local possible
-	 * 0001: to be submitted
-	 *    UNUSED, we could map: 011: submitted, completion still pending
-	 * 0110: completed ok
-	 * 0010: completed with error
-	 * 1001: Aborted (before completion)
-	 * 1x10: Aborted and completed -> free
-	 */
-	__RQ_LOCAL_PENDING,
-	__RQ_LOCAL_COMPLETED,
-	__RQ_LOCAL_OK,
-	__RQ_LOCAL_ABORTED,
-
-	/* 87654
+	/* 43210
 	 * 00000: no network possible
 	 * 00001: to be send
 	 * 00011: to be send, on worker queue
@@ -192,6 +178,32 @@ enum drbd_req_state_bits {
 	/* keep this last, its for the RQ_NET_MASK */
 	__RQ_NET_MAX,
 
+	/* We expect a receive ACK (wire proto B) */
+	__RQ_EXP_RECEIVE_ACK,
+
+	/* We expect a write ACK (wite proto C) */
+	__RQ_EXP_WRITE_ACK,
+
+	/* waiting for a barrier ack, did an extra kref_get */
+	__RQ_EXP_BARR_ACK,
+
+	/* p_peer_ack packet needs to be sent */
+	__RQ_PEER_ACK,
+
+	/* 4321
+	 * 0000: no local possible
+	 * 0001: to be submitted
+	 *    UNUSED, we could map: 011: submitted, completion still pending
+	 * 0110: completed ok
+	 * 0010: completed with error
+	 * 1001: Aborted (before completion)
+	 * 1x10: Aborted and completed -> free
+	 */
+	__RQ_LOCAL_PENDING,
+	__RQ_LOCAL_COMPLETED,
+	__RQ_LOCAL_OK,
+	__RQ_LOCAL_ABORTED,
+
 	/* Set when this is a write, clear for a read */
 	__RQ_WRITE,
 	__RQ_WSAME,
@@ -213,23 +225,7 @@ enum drbd_req_state_bits {
 	 * but was not, because of drbd_suspended() */
 	__RQ_COMPLETION_SUSP,
 
-	/* We expect a receive ACK (wire proto B) */
-	__RQ_EXP_RECEIVE_ACK,
-
-	/* We expect a write ACK (wite proto C) */
-	__RQ_EXP_WRITE_ACK,
-
-	/* waiting for a barrier ack, did an extra kref_get */
-	__RQ_EXP_BARR_ACK,
 };
-
-#define RQ_LOCAL_PENDING   (1UL << __RQ_LOCAL_PENDING)
-#define RQ_LOCAL_COMPLETED (1UL << __RQ_LOCAL_COMPLETED)
-#define RQ_LOCAL_OK        (1UL << __RQ_LOCAL_OK)
-#define RQ_LOCAL_ABORTED   (1UL << __RQ_LOCAL_ABORTED)
-
-#define RQ_LOCAL_MASK      ((RQ_LOCAL_ABORTED << 1)-1)
-
 #define RQ_NET_PENDING     (1UL << __RQ_NET_PENDING)
 #define RQ_NET_QUEUED      (1UL << __RQ_NET_QUEUED)
 #define RQ_NET_SENT        (1UL << __RQ_NET_SENT)
@@ -239,6 +235,20 @@ enum drbd_req_state_bits {
 
 #define RQ_NET_MASK        (((1UL << __RQ_NET_MAX)-1) & ~RQ_LOCAL_MASK)
 
+#define RQ_EXP_RECEIVE_ACK (1UL << __RQ_EXP_RECEIVE_ACK)
+#define RQ_EXP_WRITE_ACK   (1UL << __RQ_EXP_WRITE_ACK)
+#define RQ_EXP_BARR_ACK    (1UL << __RQ_EXP_BARR_ACK)
+
+#define RQ_PEER_ACK	   (1UL << __RQ_PEER_ACK)
+
+#define RQ_LOCAL_PENDING   (1UL << __RQ_LOCAL_PENDING)
+#define RQ_LOCAL_COMPLETED (1UL << __RQ_LOCAL_COMPLETED)
+#define RQ_LOCAL_OK        (1UL << __RQ_LOCAL_OK)
+#define RQ_LOCAL_ABORTED   (1UL << __RQ_LOCAL_ABORTED)
+
+#define RQ_LOCAL_MASK      \
+	(RQ_LOCAL_ABORTED | RQ_LOCAL_OK | RQ_LOCAL_COMPLETED | RQ_LOCAL_PENDING)
+
 #define RQ_WRITE           (1UL << __RQ_WRITE)
 #define RQ_WSAME           (1UL << __RQ_WSAME)
 #define RQ_UNMAP           (1UL << __RQ_UNMAP)
@@ -247,25 +257,27 @@ enum drbd_req_state_bits {
 #define RQ_UNPLUG          (1UL << __RQ_UNPLUG)
 #define RQ_POSTPONED	   (1UL << __RQ_POSTPONED)
 #define RQ_COMPLETION_SUSP (1UL << __RQ_COMPLETION_SUSP)
-#define RQ_EXP_RECEIVE_ACK (1UL << __RQ_EXP_RECEIVE_ACK)
-#define RQ_EXP_WRITE_ACK   (1UL << __RQ_EXP_WRITE_ACK)
-#define RQ_EXP_BARR_ACK    (1UL << __RQ_EXP_BARR_ACK)
+
+
+/* these flags go into local_rq_state,
+ * orhter flags go into their respective net_rq_state[idx] */
+#define RQ_STATE_0_MASK	\
+	(RQ_LOCAL_MASK	|\
+	 RQ_WRITE	|\
+	 RQ_WSAME       |\
+	 RQ_IN_ACT_LOG	|\
+	 RQ_POSTPONED	|\
+	 RQ_UNPLUG	|\
+	 RQ_COMPLETION_SUSP)
 
 /* For waking up the frozen transfer log mod_req() has to return if the request
    should be counted in the epoch object*/
 #define MR_WRITE       1
 #define MR_READ        2
 
-static inline void drbd_req_make_private_bio(struct drbd_request *req, struct bio *bio_src)
+static inline bool drbd_req_is_write(struct drbd_request *req)
 {
-	struct bio *bio;
-	bio = bio_clone_fast(bio_src, GFP_NOIO, &drbd_io_bio_set);
-
-	req->private_bio = bio;
-
-	bio->bi_private  = req;
-	bio->bi_end_io   = drbd_request_endio;
-	bio->bi_next     = NULL;
+	return req->local_rq_state & RQ_WRITE;
 }
 
 /* Short lived temporary struct on the stack.
@@ -276,60 +288,55 @@ struct bio_and_error {
 	int error;
 };
 
-extern void start_new_tl_epoch(struct drbd_connection *connection);
+extern bool start_new_tl_epoch(struct drbd_resource *resource);
 extern void drbd_req_destroy(struct kref *kref);
-extern void _req_may_be_done(struct drbd_request *req,
-		struct bio_and_error *m);
-extern int __req_mod(struct drbd_request *req, enum drbd_req_event what,
+extern void __req_mod(struct drbd_request *req, enum drbd_req_event what,
+		struct drbd_peer_device *peer_device,
 		struct bio_and_error *m);
 extern void complete_master_bio(struct drbd_device *device,
 		struct bio_and_error *m);
 extern void request_timer_fn(struct timer_list *t);
-extern void tl_restart(struct drbd_connection *connection, enum drbd_req_event what);
-extern void _tl_restart(struct drbd_connection *connection, enum drbd_req_event what);
-extern void tl_abort_disk_io(struct drbd_device *device);
+extern void tl_walk(struct drbd_connection *connection, enum drbd_req_event what);
+extern void _tl_walk(struct drbd_connection *connection, enum drbd_req_event what);
+extern void __tl_walk(struct drbd_resource *const resource,
+		struct drbd_connection *const connection,
+		const enum drbd_req_event what);
+extern void drbd_queue_peer_ack(struct drbd_resource *resource, struct drbd_request *req);
+extern bool drbd_should_do_remote(struct drbd_peer_device *, enum which_state);
 
 /* this is in drbd_main.c */
 extern void drbd_restart_request(struct drbd_request *req);
 
 /* use this if you don't want to deal with calling complete_master_bio()
  * outside the spinlock, e.g. when walking some list on cleanup. */
-static inline int _req_mod(struct drbd_request *req, enum drbd_req_event what)
+static inline void _req_mod(struct drbd_request *req, enum drbd_req_event what,
+		struct drbd_peer_device *peer_device)
 {
 	struct drbd_device *device = req->device;
 	struct bio_and_error m;
-	int rv;
 
 	/* __req_mod possibly frees req, do not touch req after that! */
-	rv = __req_mod(req, what, &m);
+	__req_mod(req, what, peer_device, &m);
 	if (m.bio)
 		complete_master_bio(device, &m);
-
-	return rv;
 }
 
-/* completion of master bio is outside of our spinlock.
- * We still may or may not be inside some irqs disabled section
- * of the lower level driver completion callback, so we need to
- * spin_lock_irqsave here. */
-static inline int req_mod(struct drbd_request *req,
-		enum drbd_req_event what)
+/* completion of master bio is outside of spinlock.
+ * If you need it irqsave, do it your self!
+ * Which means: don't use from bio endio callback. */
+static inline void req_mod(struct drbd_request *req,
+		enum drbd_req_event what,
+		struct drbd_peer_device *peer_device)
 {
-	unsigned long flags;
 	struct drbd_device *device = req->device;
 	struct bio_and_error m;
-	int rv;
 
-	spin_lock_irqsave(&device->resource->req_lock, flags);
-	rv = __req_mod(req, what, &m);
-	spin_unlock_irqrestore(&device->resource->req_lock, flags);
+	spin_lock_irq(&device->resource->req_lock);
+	__req_mod(req, what, peer_device, &m);
+	spin_unlock_irq(&device->resource->req_lock);
 
 	if (m.bio)
 		complete_master_bio(device, &m);
-
-	return rv;
 }
-
-extern bool drbd_should_do_remote(union drbd_dev_state);
 
 #endif

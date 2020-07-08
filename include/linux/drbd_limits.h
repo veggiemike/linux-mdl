@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
   drbd_limits.h
   This file is part of DRBD by Philipp Reisner and Lars Ellenberg.
@@ -21,7 +20,7 @@
 #define DRBD_MINOR_COUNT_DEF 32
 #define DRBD_MINOR_COUNT_SCALE '1'
 
-#define DRBD_VOLUME_MAX 65535
+#define DRBD_VOLUME_MAX 65534
 
 #define DRBD_DIALOG_REFRESH_MIN 0
 #define DRBD_DIALOG_REFRESH_MAX 600
@@ -64,7 +63,7 @@
 #define DRBD_DISK_TIMEOUT_DEF 0    /* disabled */
 #define DRBD_DISK_TIMEOUT_SCALE '1'
 
-  /* active connection retries when C_WF_CONNECTION */
+  /* active connection retries when C_CONNECTING */
 #define DRBD_CONNECT_INT_MIN 1
 #define DRBD_CONNECT_INT_MAX 120
 #define DRBD_CONNECT_INT_DEF 10   /* seconds */
@@ -117,16 +116,19 @@
 #define DRBD_KO_COUNT_MAX  200
 #define DRBD_KO_COUNT_DEF  7
 #define DRBD_KO_COUNT_SCALE '1'
+
+#define DRBD_ALLOW_REMOTE_READ_DEF 1
 /* } */
 
 /* syncer { */
   /* FIXME allow rate to be zero? */
 #define DRBD_RESYNC_RATE_MIN 1
 /* channel bonding 10 GbE, or other hardware */
-#define DRBD_RESYNC_RATE_MAX (4 << 20)
+#define DRBD_RESYNC_RATE_MAX (8 << 20)
 #define DRBD_RESYNC_RATE_DEF 250
 #define DRBD_RESYNC_RATE_SCALE 'k'  /* kilobytes */
 
+  /* less than 67 would hit performance unnecessarily. */
 #define DRBD_AL_EXTENTS_MIN  67
   /* we use u16 as "slot number", (u16)~0 is "FREE".
    * If you use >= 292 kB on-disk ring buffer,
@@ -207,10 +209,10 @@
 #define DRBD_DISK_BARRIER_DEF	0
 #define DRBD_DISK_FLUSHES_DEF	1
 #define DRBD_DISK_DRAIN_DEF	1
+#define DRBD_DISK_DISKLESS_DEF	0
 #define DRBD_MD_FLUSHES_DEF	1
 #define DRBD_TCP_CORK_DEF	1
 #define DRBD_AL_UPDATES_DEF     1
-
 /* We used to ignore the discard_zeroes_data setting.
  * To not change established (and expected) behaviour,
  * by default assume that, for discard_zeroes_data=0,
@@ -227,6 +229,51 @@
 #define DRBD_ALWAYS_ASBP_DEF	0
 #define DRBD_USE_RLE_DEF	1
 #define DRBD_CSUMS_AFTER_CRASH_ONLY_DEF 0
+#define DRBD_AUTO_PROMOTE_DEF	1
+#define DRBD_BITMAP_DEF         1
+
+#define DRBD_NR_REQUESTS_MIN	4
+#define DRBD_NR_REQUESTS_DEF	8000
+#define DRBD_NR_REQUESTS_MAX	-1U
+#define DRBD_NR_REQUESTS_SCALE	'1'
+
+#define DRBD_MAX_BIO_SIZE_DEF	DRBD_MAX_BIO_SIZE
+#define DRBD_MAX_BIO_SIZE_MIN	(1 << 9)
+#define DRBD_MAX_BIO_SIZE_MAX	DRBD_MAX_BIO_SIZE
+#define DRBD_MAX_BIO_SIZE_SCALE '1'
+
+#define DRBD_NODE_ID_DEF		0
+#define DRBD_NODE_ID_MIN		0
+#ifndef DRBD_NODE_ID_MAX /* Is also defined in drbd.h */
+#define DRBD_NODE_ID_MAX		DRBD_PEERS_MAX
+#endif
+#define DRBD_NODE_ID_SCALE		'1'
+
+#define DRBD_PEER_ACK_WINDOW_DEF	4096   /* 2 MiByte */
+#define DRBD_PEER_ACK_WINDOW_MIN	2048   /* 1 MiByte */
+#define DRBD_PEER_ACK_WINDOW_MAX	204800 /* 100 MiByte */
+#define DRBD_PEER_ACK_WINDOW_SCALE 's' /* sectors*/
+
+#define DRBD_PEER_ACK_DELAY_DEF	100    /* 100ms */
+#define DRBD_PEER_ACK_DELAY_MIN 1
+#define DRBD_PEER_ACK_DELAY_MAX 10000  /* 10 seconds */
+#define DRBD_PEER_ACK_DELAY_SCALE '1' /* milliseconds */
+
+/* Two-phase commit timeout (1/10 seconds). */
+#define DRBD_TWOPC_TIMEOUT_MIN	50
+#define DRBD_TWOPC_TIMEOUT_MAX	600
+#define DRBD_TWOPC_TIMEOUT_DEF	300
+#define DRBD_TWOPC_TIMEOUT_SCALE '1'
+
+#define DRBD_TWOPC_RETRY_TIMEOUT_MIN 1
+#define DRBD_TWOPC_RETRY_TIMEOUT_MAX 50
+#define DRBD_TWOPC_RETRY_TIMEOUT_DEF 1
+#define DRBD_TWOPC_RETRY_TIMEOUT_SCALE '1'
+
+#define DRBD_SYNC_FROM_NID_DEF -1
+#define DRBD_SYNC_FROM_NID_MIN -1
+#define DRBD_SYNC_FROM_NID_MAX DRBD_PEERS_MAX
+#define DRBD_SYNC_FROM_NID_SCALE '1'
 
 #define DRBD_AL_STRIPES_MIN     1
 #define DRBD_AL_STRIPES_MAX     1024
@@ -243,9 +290,23 @@
 #define DRBD_SOCKET_CHECK_TIMEO_DEF 0
 #define DRBD_SOCKET_CHECK_TIMEO_SCALE '1'
 
+/* Auto promote timeout (1/10 seconds). */
+#define DRBD_AUTO_PROMOTE_TIMEOUT_MIN 0
+#define DRBD_AUTO_PROMOTE_TIMEOUT_MAX 600
+#define DRBD_AUTO_PROMOTE_TIMEOUT_DEF 20
+#define DRBD_AUTO_PROMOTE_TIMEOUT_SCALE '1'
+
 #define DRBD_RS_DISCARD_GRANULARITY_MIN 0
 #define DRBD_RS_DISCARD_GRANULARITY_MAX (1<<20)  /* 1MiByte */
 #define DRBD_RS_DISCARD_GRANULARITY_DEF 0     /* disabled by default */
 #define DRBD_RS_DISCARD_GRANULARITY_SCALE '1' /* bytes */
+
+#define DRBD_QUORUM_MIN 0
+#define DRBD_QUORUM_MAX QOU_ALL /* Note: user visible min/max different */
+#define DRBD_QUORUM_DEF QOU_OFF /* kernel min/max includes symbolic values */
+#define DRBD_QUORUM_SCALE '1' /* nodes */
+
+/* By default freeze IO, if set error all IOs as quick as possible */
+#define DRBD_ON_NO_QUORUM_DEF ONQ_SUSPEND_IO
 
 #endif

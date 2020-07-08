@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef GENL_MAGIC_STRUCT_H
 #define GENL_MAGIC_STRUCT_H
 
@@ -14,8 +13,16 @@
 # error "you need to define GENL_MAGIC_INCLUDE_FILE before inclusion"
 #endif
 
+#include <linux/netlink.h>
 #include <linux/genetlink.h>
+#ifdef __KERNEL__
+#include <net/genetlink.h>
+#else
+#define sk_buff msg_buff
+#define skb msg
+#endif
 #include <linux/types.h>
+#include <linux/drbd_compat.h>
 
 #define CONCAT__(a,b)	a ## b
 #define CONCAT_(a,b)	CONCAT__(a,b)
@@ -63,9 +70,13 @@ extern void CONCAT_(GENL_MAGIC_FAMILY, _genl_unregister)(void);
 
 /* MAGIC helpers							{{{2 */
 
-static inline int nla_put_u64_0pad(struct sk_buff *skb, int attrtype, u64 value)
+static inline int nla_put_u64_0pad(struct sk_buff *skb, int attrtype, __u64 value)
 {
-	return nla_put_64bit(skb, attrtype, sizeof(u64), &value, 0);
+#ifdef COMPAT_HAVE_NLA_PUT_64BIT
+	return nla_put_64bit(skb, attrtype, sizeof(__u64), &value, 0);
+#else
+	return nla_put_u64(skb, attrtype, value);
+#endif
 }
 
 /* possible field types */
@@ -81,9 +92,15 @@ static inline int nla_put_u64_0pad(struct sk_buff *skb, int attrtype, u64 value)
 #define __u32_field(attr_nr, attr_flag, name)	\
 	__field(attr_nr, attr_flag, name, NLA_U32, __u32, \
 			nla_get_u32, nla_put_u32, false)
+#ifdef COMPAT_HAVE_SIGNED_NLA_PUT
+#define __s32_field(attr_nr, attr_flag, name)	\
+	__field(attr_nr, attr_flag, name, NLA_S32, __s32, \
+			nla_get_s32, nla_put_s32, true)
+#else
 #define __s32_field(attr_nr, attr_flag, name)	\
 	__field(attr_nr, attr_flag, name, NLA_U32, __s32, \
 			nla_get_u32, nla_put_u32, true)
+#endif
 #define __u64_field(attr_nr, attr_flag, name)	\
 	__field(attr_nr, attr_flag, name, NLA_U64, __u64, \
 			nla_get_u64, nla_put_u64_0pad, false)
@@ -191,7 +208,6 @@ static inline void ct_assert_unique_operations(void)
 {
 	switch (0) {
 #include GENL_MAGIC_INCLUDE_FILE
-	case 0:
 		;
 	}
 }
@@ -210,7 +226,6 @@ static inline void ct_assert_unique_top_level_attributes(void)
 {
 	switch (0) {
 #include GENL_MAGIC_INCLUDE_FILE
-	case 0:
 		;
 	}
 }
@@ -220,8 +235,7 @@ static inline void ct_assert_unique_top_level_attributes(void)
 static inline void ct_assert_unique_ ## s_name ## _attributes(void)	\
 {									\
 	switch (0) {							\
-	s_fields							\
-	case 0:								\
+		s_fields						\
 			;						\
 	}								\
 }
