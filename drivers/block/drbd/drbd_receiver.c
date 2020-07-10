@@ -32,7 +32,6 @@
 #include <linux/random.h>
 #include <net/ipv6.h>
 #include <linux/scatterlist.h>
-#include <linux/part_stat.h>
 
 #include "drbd_int.h"
 #include "drbd_protocol.h"
