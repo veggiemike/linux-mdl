@@ -154,8 +154,7 @@ static struct drbd_path *__drbd_next_path_ref(struct drbd_path *drbd_path,
 
 static void dtt_nodelay(struct socket *socket)
 {
-	int val = 1;
-	(void) kernel_setsockopt(socket, SOL_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+	tcp_sock_set_nodelay(socket->sk);
 }
 
 static int dtt_init(struct drbd_transport *transport)
@@ -877,7 +876,6 @@ static int dtt_connect(struct drbd_transport *transport)
 	struct socket *dsocket, *csocket;
 	struct net_conf *nc;
 	int timeout, err;
-	int one = 1;
 	bool ok;
 
 	dsocket = NULL;
@@ -1062,9 +1060,7 @@ randomize:
 	dsocket->sk->sk_sndtimeo = timeout;
 	csocket->sk->sk_sndtimeo = timeout;
 
-	err = kernel_setsockopt(dsocket, SOL_SOCKET, SO_KEEPALIVE, (char *)&one, sizeof(one));
-	if (err)
-		tr_warn(transport, "Failed to enable SO_KEEPALIVE %d\n", err);
+	sock_set_keepalive(dsocket->sk);
 
 	return 0;
 
@@ -1204,20 +1200,17 @@ static int dtt_send_zc_bio(struct drbd_transport *transport, struct bio *bio)
 
 static void dtt_cork(struct socket *socket)
 {
-	int val = 1;
-	(void) kernel_setsockopt(socket, SOL_TCP, TCP_CORK, (char *)&val, sizeof(val));
+	tcp_sock_set_cork(socket->sk, true);
 }
 
 static void dtt_uncork(struct socket *socket)
 {
-	int val = 0;
-	(void) kernel_setsockopt(socket, SOL_TCP, TCP_CORK, (char *)&val, sizeof(val));
+	tcp_sock_set_cork(socket->sk, false);
 }
 
 static void dtt_quickack(struct socket *socket)
 {
-	int val = 2;
-	(void) kernel_setsockopt(socket, SOL_TCP, TCP_QUICKACK, (char *)&val, sizeof(val));
+	tcp_sock_set_quickack(socket->sk, 2);
 }
 
 static bool dtt_hint(struct drbd_transport *transport, enum drbd_stream stream,
