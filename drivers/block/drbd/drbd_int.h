@@ -1836,7 +1836,7 @@ extern void do_submit(struct work_struct *ws);
 #define __drbd_make_request(d,b,k,j) __drbd_make_request(d,b,j)
 #endif
 extern void __drbd_make_request(struct drbd_device *, struct bio *, ktime_t, unsigned long);
-extern blk_qc_t drbd_make_request(struct request_queue *q, struct bio *bio);
+extern blk_qc_t drbd_submit_bio(struct bio *bio);
 
 /* drbd_nl.c */
 enum suspend_scope {
@@ -2052,7 +2052,7 @@ static inline void drbd_kobject_uevent(struct drbd_device *device)
 /*
  * used to submit our private bio
  */
-static inline void drbd_generic_make_request(struct drbd_device *device,
+static inline void drbd_submit_bio_noacct(struct drbd_device *device,
 					     int fault_type, struct bio *bio)
 {
 	__release(local);
@@ -2061,7 +2061,7 @@ static inline void drbd_generic_make_request(struct drbd_device *device,
 		bio->bi_status = BLK_STS_IOERR;
 		bio_endio(bio);
 	} else {
-		generic_make_request(bio);
+		submit_bio_noacct(bio);
 	}
 }
 
@@ -2196,7 +2196,7 @@ static inline void __drbd_chk_io_error_(struct drbd_device *device,
 			}
 			break;
 		}
-		/* fall through - for DRBD_META_IO_ERROR or DRBD_FORCE_DETACH */
+		fallthrough;	/* for DRBD_META_IO_ERROR or DRBD_FORCE_DETACH */
 	case EP_DETACH:
 	case EP_CALL_HELPER:
 		/* Remember whether we saw a READ or WRITE error.

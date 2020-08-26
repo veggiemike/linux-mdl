@@ -157,9 +157,10 @@ int          drbd_pp_vacant;
 wait_queue_head_t drbd_pp_wait;
 
 static const struct block_device_operations drbd_ops = {
-	.owner =   THIS_MODULE,
-	.open =    drbd_open,
-	.release = drbd_release,
+	.owner		= THIS_MODULE,
+	.submit_bio	= drbd_submit_bio,
+	.open		= drbd_open,
+	.release	= drbd_release,
 };
 
 struct bio *bio_alloc_drbd(gfp_t gfp_mask)
@@ -705,7 +706,7 @@ int drbd_thread_start(struct drbd_thread *thi)
 		else
 			drbd_info(resource, "Restarting %s thread (from %s [%d])\n",
 					thi->name, current->comm, current->pid);
-		/* fall through */
+		fallthrough;
 	case RUNNING:
 	case RESTARTING:
 	default:
@@ -3043,7 +3044,7 @@ static void do_retry(struct work_struct *ws)
 		 * workqueues instead.
 		 */
 
-		/* We are not just doing generic_make_request(),
+		/* We are not just doing submit_bio_noacct(),
 		 * as we want to keep the start_time information. */
 		__drbd_make_request(device, bio, start_kt, start_jif);
 	}
@@ -3092,63 +3093,6 @@ static void drbd_cleanup(void)
 	idr_destroy(&drbd_devices);
 
 	pr_info("module cleanup done.\n");
-}
-
-/**
- * drbd_congested() - Callback for the flusher thread
- * @congested_data:	User data
- * @bdi_bits:		Bits the BDI flusher thread is currently interested in
- *
- * Returns 1<<WB_async_congested and/or 1<<WB_sync_congested if we are congested.
- */
-static int drbd_congested(void *congested_data, int bdi_bits)
-{
-	struct drbd_device *device = congested_data;
-	struct request_queue *q;
-	int r = 0;
-
-	if (!may_inc_ap_bio(device)) {
-		/* DRBD has frozen IO */
-		r = bdi_bits;
-		goto out;
-	}
-
-	if (test_bit(CALLBACK_PENDING, &device->resource->flags)) {
-		r |= (1 << WB_async_congested);
-		/* Without good local data, we would need to read from remote,
-		 * and that would need the worker thread as well, which is
-		 * currently blocked waiting for that usermode helper to
-		 * finish.
-		 */
-		if (!get_ldev_if_state(device, D_UP_TO_DATE))
-			r |= (1 << WB_sync_congested);
-		else
-			put_ldev(device);
-		r &= bdi_bits;
-		goto out;
-	}
-
-	if (get_ldev(device)) {
-		q = bdev_get_queue(device->ldev->backing_bdev);
-		r = bdi_congested(q->backing_dev_info, bdi_bits);
-		put_ldev(device);
-	}
-
-	if (bdi_bits & (1 << WB_async_congested)) {
-		struct drbd_peer_device *peer_device;
-
-		rcu_read_lock();
-		for_each_peer_device_rcu(peer_device, device) {
-			if (test_bit(NET_CONGESTED, &peer_device->connection->transport.flags)) {
-				r |= (1 << WB_async_congested);
-				break;
-			}
-		}
-		rcu_read_unlock();
-	}
-
-out:
-	return r;
 }
 
 static void drbd_init_workqueue(struct drbd_work_queue* wq)
@@ -3700,11 +3644,10 @@ enum drbd_ret_code drbd_create_device(struct drbd_config_context *adm_ctx, unsig
 
 	init_rwsem(&device->uuid_sem);
 
-	q = blk_alloc_queue(drbd_make_request, NUMA_NO_NODE);
+	q = blk_alloc_queue(NUMA_NO_NODE);
 	if (!q)
 		goto out_no_q;
 	device->rq_queue = q;
-	q->queuedata   = device;
 
 	disk = alloc_disk(1);
 	if (!disk)
@@ -3721,8 +3664,6 @@ enum drbd_ret_code drbd_create_device(struct drbd_config_context *adm_ctx, unsig
 	device->this_bdev = bdget(MKDEV(DRBD_MAJOR, minor));
 	/* we have no partitions. we contain only ourselves. */
 	device->this_bdev->bd_contains = device->this_bdev;
-
-	init_bdev_info(q->backing_dev_info, drbd_congested, device);
 
 	blk_queue_write_cache(q, true, true);
 
