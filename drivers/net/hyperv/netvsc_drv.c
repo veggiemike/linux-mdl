@@ -2544,8 +2544,8 @@ static int netvsc_remove(struct hv_device *dev)
 static int netvsc_suspend(struct hv_device *dev)
 {
 	struct net_device_context *ndev_ctx;
-	struct net_device *vf_netdev, *net;
 	struct netvsc_device *nvdev;
+	struct net_device *net;
 	int ret;
 
 	net = hv_get_drvdata(dev);
@@ -2560,10 +2560,6 @@ static int netvsc_suspend(struct hv_device *dev)
 		ret = -ENODEV;
 		goto out;
 	}
-
-	vf_netdev = rtnl_dereference(ndev_ctx->vf_netdev);
-	if (vf_netdev)
-		netvsc_unregister_vf(vf_netdev);
 
 	/* Save the current config info */
 	ndev_ctx->saved_netvsc_dev_info = netvsc_devinfo_get(nvdev);
@@ -2652,6 +2648,7 @@ static int netvsc_netdev_event(struct notifier_block *this,
 		return netvsc_unregister_vf(event_dev);
 	case NETDEV_UP:
 	case NETDEV_DOWN:
+	case NETDEV_CHANGE:
 		return netvsc_vf_changed(event_dev);
 	default:
 		return NOTIFY_DONE;
