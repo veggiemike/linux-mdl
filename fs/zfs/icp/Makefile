@@ -33,9 +33,9 @@ endif
 
 obj-$(CONFIG_ZFS) := $(MODULE).o
 
-asflags-y := -I/scrap/zfs/module/icp/include
+asflags-y := -I$(srctree)/fs/zfs/icp/include
 asflags-y += $(ZFS_MODULE_CFLAGS) $(ZFS_MODULE_CPPFLAGS)
-ccflags-y := -I/scrap/zfs/module/icp/include
+ccflags-y := -I$(srctree)/fs/zfs/icp/include
 ccflags-y += $(ZFS_MODULE_CFLAGS) $(ZFS_MODULE_CPPFLAGS)
 
 $(MODULE)-objs += illumos-crypto.o
