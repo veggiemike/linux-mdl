@@ -25,9 +25,9 @@
 #include <sys/zfs_context.h>
 #include <sys/crypto/icp.h>
 #include <sys/crypto/spi.h>
+#include <sys/simd.h>
 #include <modes/modes.h>
 #include <aes/aes_impl.h>
-#include <linux/simd.h>
 
 /*
  * Initialize AES encryption and decryption key schedules.
@@ -330,7 +330,7 @@ aes_impl_init(void)
 	    sizeof (aes_fastest_impl));
 #endif
 
-	strcpy(aes_fastest_impl.name, "fastest");
+	strlcpy(aes_fastest_impl.name, "fastest", AES_IMPL_NAME_MAX);
 
 	/* Finish initialization */
 	atomic_swap_32(&icp_aes_impl, user_sel_impl);
@@ -405,8 +405,7 @@ aes_impl_set(const char *val)
 	return (err);
 }
 
-#if defined(_KERNEL)
-#include <linux/mod_compat.h>
+#if defined(_KERNEL) && defined(__linux__)
 
 static int
 icp_aes_impl_set(const char *val, zfs_kernel_param_t *kp)

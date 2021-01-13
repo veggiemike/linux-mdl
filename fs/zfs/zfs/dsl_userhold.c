@@ -101,9 +101,9 @@ dsl_dataset_user_hold_check(void *arg, dmu_tx_t *tx)
 		size_t len = strlen(nvpair_name(pair)) +
 		    strlen(fnvpair_value_string(pair));
 		char *nameval = kmem_zalloc(len + 2, KM_SLEEP);
-		(void) strcpy(nameval, nvpair_name(pair));
-		(void) strcat(nameval, "@");
-		(void) strcat(nameval, fnvpair_value_string(pair));
+		(void) strlcpy(nameval, nvpair_name(pair), len + 2);
+		(void) strlcat(nameval, "@", len + 2);
+		(void) strlcat(nameval, fnvpair_value_string(pair), len + 2);
 		fnvlist_add_string(tmp_holds, nameval, "");
 		kmem_free(nameval, len + 2);
 	}
@@ -197,7 +197,7 @@ dsl_dataset_user_hold_sync_one_impl(nvlist_t *tmpholds, dsl_dataset_t *ds,
 
 	spa_history_log_internal_ds(ds, "hold", tx,
 	    "tag=%s temp=%d refs=%llu",
-	    htag, minor != 0, ds->ds_userrefs);
+	    htag, minor != 0, (u_longlong_t)ds->ds_userrefs);
 }
 
 typedef struct zfs_hold_cleanup_arg {
@@ -406,7 +406,7 @@ dsl_dataset_user_release_check_one(dsl_dataset_user_release_arg_t *ddura,
 				    snapname, holdname);
 				fnvlist_add_int32(ddura->ddura_errlist, errtag,
 				    ENOENT);
-				strfree(errtag);
+				kmem_strfree(errtag);
 			}
 			continue;
 		}

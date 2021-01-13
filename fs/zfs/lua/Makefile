@@ -1,14 +1,13 @@
+ifneq ($(KBUILD_EXTMOD),)
+src = /scrap/zfs/module/lua
+obj = /scrap/zfs/module/lua
+endif
 
 MODULE := zlua
 
 obj-$(CONFIG_ZFS) := $(MODULE).o
 
-asflags-y += $(ZFS_MODULE_CFLAGS)
-ccflags-y := $(ZFS_MODULE_CFLAGS) $(ZFS_MODULE_CPPFLAGS)
-ccflags-y += -DLUA_USE_LONGLONG
-
-# Suppress unused but set variable warnings often due to ASSERTs
-ccflags-y += $(NO_UNUSED_BUT_SET_VARIABLE)
+ccflags-y := -DLUA_USE_LONGLONG
 
 $(MODULE)-objs += lapi.o
 $(MODULE)-objs += lauxlib.o

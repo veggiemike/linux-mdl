@@ -8,12 +8,6 @@
 /* bio_end_io_t wants 1 arg */
 #define HAVE_1ARG_BIO_END_IO_T 1
 
-/* invalidate_bdev() wants 1 arg */
-#define HAVE_1ARG_INVALIDATE_BDEV 1
-
-/* kmap_atomic wants 1 args */
-#define HAVE_1ARG_KMAP_ATOMIC 1
-
 /* lookup_bdev() wants 1 arg */
 #define HAVE_1ARG_LOOKUP_BDEV 1
 
@@ -22,18 +16,6 @@
 
 /* bdi_setup_and_register() wants 2 args */
 /* #undef HAVE_2ARGS_BDI_SETUP_AND_REGISTER */
-
-/* lookup_bdev() wants 2 args */
-/* #undef HAVE_2ARGS_LOOKUP_BDEV */
-
-/* new shrinker callback wants 2 args */
-/* #undef HAVE_2ARGS_NEW_SHRINKER_CALLBACK */
-
-/* old shrinker callback wants 2 args */
-/* #undef HAVE_2ARGS_OLD_SHRINKER_CALLBACK */
-
-/* vfs_fsync() wants 2 args */
-#define HAVE_2ARGS_VFS_FSYNC 1
 
 /* vfs_getattr wants 2 args */
 /* #undef HAVE_2ARGS_VFS_GETATTR */
@@ -44,20 +26,11 @@
 /* bdi_setup_and_register() wants 3 args */
 /* #undef HAVE_3ARGS_BDI_SETUP_AND_REGISTER */
 
-/* old shrinker callback wants 3 args */
-/* #undef HAVE_3ARGS_SHRINKER_CALLBACK */
-
 /* vfs_getattr wants 3 args */
 /* #undef HAVE_3ARGS_VFS_GETATTR */
 
 /* vfs_getattr wants 4 args */
 #define HAVE_4ARGS_VFS_GETATTR 1
-
-/* sget() wants 5 args */
-#define HAVE_5ARG_SGET 1
-
-/* security_inode_init_security wants 6 args */
-/* #undef HAVE_6ARGS_SECURITY_INODE_INIT_SECURITY */
 
 /* kernel has access_ok with 'type' parameter */
 /* #undef HAVE_ACCESS_OK_TYPE */
@@ -67,9 +40,6 @@
 
 /* Define if host toolchain supports AES */
 #define HAVE_AES 1
-
-/* dops->automount() exists */
-#define HAVE_AUTOMOUNT 1
 
 /* Define if host toolchain supports AVX */
 #define HAVE_AVX 1
@@ -104,11 +74,11 @@
 /* Define if host toolchain supports AVX512VL */
 #define HAVE_AVX512VL 1
 
-/* bdev_logical_block_size() is available */
-#define HAVE_BDEV_LOGICAL_BLOCK_SIZE 1
+/* bdev_check_media_change() exists */
+/* #undef HAVE_BDEV_CHECK_MEDIA_CHANGE */
 
-/* bdev_physical_block_size() is available */
-#define HAVE_BDEV_PHYSICAL_BLOCK_SIZE 1
+/* bdev_whole() is available */
+/* #undef HAVE_BDEV_WHOLE */
 
 /* bio->bi_opf is defined */
 #define HAVE_BIO_BI_OPF 1
@@ -119,14 +89,8 @@
 /* bio has bi_iter */
 #define HAVE_BIO_BVEC_ITER 1
 
-/* BIO_RW_BARRIER is defined */
-/* #undef HAVE_BIO_RW_BARRIER */
-
-/* BIO_RW_DISCARD is defined */
-/* #undef HAVE_BIO_RW_DISCARD */
-
-/* BIO_RW_FAILFAST_* are defined */
-/* #undef HAVE_BIO_RW_FAILFAST_DTD */
+/* bio_*_io_acct() available */
+/* #undef HAVE_BIO_IO_ACCT */
 
 /* bio_set_dev() is available */
 #define HAVE_BIO_SET_DEV 1
@@ -137,10 +101,7 @@
 /* bio_set_op_attrs is available */
 #define HAVE_BIO_SET_OP_ATTRS 1
 
-/* blkdev_get_by_path() is available */
-#define HAVE_BLKDEV_GET_BY_PATH 1
-
-/* blkdev_reread_part() is available */
+/* blkdev_reread_part() exists */
 #define HAVE_BLKDEV_REREAD_PART 1
 
 /* blkg_tryget() is available */
@@ -152,11 +113,11 @@
 /* blk_alloc_queue() expects request function */
 /* #undef HAVE_BLK_ALLOC_QUEUE_REQUEST_FN */
 
+/* blk_alloc_queue_rh() expects request function */
+/* #undef HAVE_BLK_ALLOC_QUEUE_REQUEST_FN_RH */
+
 /* blk queue backing_dev_info is dynamic */
 #define HAVE_BLK_QUEUE_BDI_DYNAMIC 1
-
-/* blk_queue_discard() is available */
-#define HAVE_BLK_QUEUE_DISCARD 1
 
 /* blk_queue_flag_clear() exists */
 #define HAVE_BLK_QUEUE_FLAG_CLEAR 1
@@ -170,18 +131,6 @@
 /* blk_queue_flush() is GPL-only */
 /* #undef HAVE_BLK_QUEUE_FLUSH_GPL_ONLY */
 
-/* BIO_RW_UNPLUG is available */
-/* #undef HAVE_BLK_QUEUE_HAVE_BIO_RW_UNPLUG */
-
-/* struct blk_plug is available */
-#define HAVE_BLK_QUEUE_HAVE_BLK_PLUG 1
-
-/* blk_queue_max_hw_sectors() is available */
-#define HAVE_BLK_QUEUE_MAX_HW_SECTORS 1
-
-/* blk_queue_max_segments() is available */
-#define HAVE_BLK_QUEUE_MAX_SEGMENTS 1
-
 /* blk_queue_secdiscard() is available */
 /* #undef HAVE_BLK_QUEUE_SECDISCARD */
 
@@ -192,16 +141,7 @@
 #define HAVE_BLK_QUEUE_WRITE_CACHE 1
 
 /* blk_queue_write_cache() is GPL-only */
-#define HAVE_BLK_QUEUE_WRITE_CACHE_GPL_ONLY 1
-
-/* bops->check_events() exists */
-#define HAVE_BLOCK_DEVICE_OPERATIONS_CHECK_EVENTS 1
-
-/* bops->release() returns void */
-#define HAVE_BLOCK_DEVICE_OPERATIONS_RELEASE_VOID 1
-
-/* security_inode_init_security wants callback */
-#define HAVE_CALLBACK_SECURITY_INODE_INIT_SECURITY 1
+/* #undef HAVE_BLK_QUEUE_WRITE_CACHE_GPL_ONLY */
 
 /* Define to 1 if you have the Mac OS X function CFLocaleCopyCurrent in the
    CoreFoundation framework. */
@@ -215,38 +155,20 @@
    the CoreFoundation framework. */
 /* #undef HAVE_CFPREFERENCESCOPYAPPVALUE */
 
-/* iops->check_acl() exists */
-/* #undef HAVE_CHECK_ACL */
-
-/* iops->check_acl() wants flags */
-/* #undef HAVE_CHECK_ACL_WITH_FLAGS */
+/* check_disk_change() exists */
+#define HAVE_CHECK_DISK_CHANGE 1
 
 /* clear_inode() is available */
 #define HAVE_CLEAR_INODE 1
 
-/* eops->commit_metadata() exists */
-#define HAVE_COMMIT_METADATA 1
-
 /* dentry uses const struct dentry_operations */
 #define HAVE_CONST_DENTRY_OPERATIONS 1
 
-/* super_block uses const struct xattr_handler */
-#define HAVE_CONST_XATTR_HANDLER 1
+/* copy_from_iter() is available */
+#define HAVE_COPY_FROM_ITER 1
 
-/* iops->create() passes nameidata */
-/* #undef HAVE_CREATE_NAMEIDATA */
-
-/* cred_t->user_ns exists */
-#define HAVE_CRED_USER_NS 1
-
-/* struct ctl_table has ctl_name */
-/* #undef HAVE_CTL_NAME */
-
-/* current->bio_list exists */
-#define HAVE_CURRENT_BIO_LIST 1
-
-/* current->bio_tail exists */
-/* #undef HAVE_CURRENT_BIO_TAIL */
+/* copy_to_iter() is available */
+#define HAVE_COPY_TO_ITER 1
 
 /* current_time() exists */
 #define HAVE_CURRENT_TIME 1
@@ -258,11 +180,11 @@
 /* DECLARE_EVENT_CLASS() is available */
 #define HAVE_DECLARE_EVENT_CLASS 1
 
+/* lookup_bdev() wants dev_t arg */
+/* #undef HAVE_DEVT_LOOKUP_BDEV */
+
 /* sops->dirty_inode() wants flags */
 #define HAVE_DIRTY_INODE_WITH_FLAGS 1
-
-/* ql->discard_granularity is available */
-#define HAVE_DISCARD_GRANULARITY 1
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
@@ -270,17 +192,11 @@
 /* d_make_root() is available */
 #define HAVE_D_MAKE_ROOT 1
 
-/* d_obtain_alias() is available */
-#define HAVE_D_OBTAIN_ALIAS 1
-
 /* d_prune_aliases() is available */
 #define HAVE_D_PRUNE_ALIASES 1
 
 /* dops->d_revalidate() operation takes nameidata */
 /* #undef HAVE_D_REVALIDATE_NAMEIDATA */
-
-/* d_set_d_op() is available */
-#define HAVE_D_SET_D_OP 1
 
 /* eops->encode_fh() wants child and parent inodes */
 #define HAVE_ENCODE_FH_WITH_INODE 1
@@ -294,17 +210,8 @@
 /* file_dentry() is available */
 #define HAVE_FILE_DENTRY 1
 
-/* fops->fallocate() exists */
-#define HAVE_FILE_FALLOCATE 1
-
 /* file_inode() is available */
 #define HAVE_FILE_INODE 1
-
-/* kernel defines fmode_t */
-#define HAVE_FMODE_T 1
-
-/* follow_down_one() is available */
-#define HAVE_FOLLOW_DOWN_ONE 1
 
 /* iops->follow_link() cookie */
 /* #undef HAVE_FOLLOW_LINK_COOKIE */
@@ -312,25 +219,16 @@
 /* iops->follow_link() nameidata */
 /* #undef HAVE_FOLLOW_LINK_NAMEIDATA */
 
-/* sops->free_cached_objects() exists */
-/* #undef HAVE_FREE_CACHED_OBJECTS */
-
-/* fst->mount() exists */
-#define HAVE_FST_MOUNT 1
-
 /* fops->fsync() with range */
 #define HAVE_FSYNC_RANGE 1
 
 /* fops->fsync() without dentry */
 /* #undef HAVE_FSYNC_WITHOUT_DENTRY */
 
-/* fops->fsync() with dentry */
-/* #undef HAVE_FSYNC_WITH_DENTRY */
-
-/* generic_start_io_acct()/generic_end_io_acct() available */
+/* generic_*_io_acct() 3 arg available */
 /* #undef HAVE_GENERIC_IO_ACCT_3ARG */
 
-/* generic_start_io_acct()/generic_end_io_acct() 4 arg available */
+/* generic_*_io_acct() 4 arg available */
 #define HAVE_GENERIC_IO_ACCT_4ARG 1
 
 /* generic_readlink is global */
@@ -345,15 +243,6 @@
 /* Define if the GNU gettext() function is already present or preinstalled. */
 #define HAVE_GETTEXT 1
 
-/* iops->get_acl() exists */
-#define HAVE_GET_ACL 1
-
-/* get_disk_and_module() is available */
-#define HAVE_GET_DISK_AND_MODULE 1
-
-/* blk_disk_ro() is available */
-#define HAVE_GET_DISK_RO 1
-
 /* iops->get_link() cookie */
 /* #undef HAVE_GET_LINK_COOKIE */
 
@@ -363,17 +252,14 @@
 /* group_info->gid exists */
 #define HAVE_GROUP_INFO_GID 1
 
-/* Define if you have the iconv() function and it works. */
-#define HAVE_ICONV 1
+/* has_capability() is available */
+#define HAVE_HAS_CAPABILITY 1
 
-/* fops->fallocate() exists */
-/* #undef HAVE_INODE_FALLOCATE */
+/* Define if you have the iconv() function and it works. */
+/* #undef HAVE_ICONV */
 
 /* yes */
 #define HAVE_INODE_LOCK_SHARED 1
-
-/* inode_owner_or_capable() exists */
-#define HAVE_INODE_OWNER_OR_CAPABLE 1
 
 /* inode_set_flags() exists */
 #define HAVE_INODE_SET_FLAGS 1
@@ -387,38 +273,56 @@
 /* timestamp_truncate() exists */
 #define HAVE_INODE_TIMESTAMP_TRUNCATE 1
 
-/* iops->truncate_range() exists */
-/* #undef HAVE_INODE_TRUNCATE_RANGE */
-
-/* insert_inode_locked() is available */
-#define HAVE_INSERT_INODE_LOCKED 1
-
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
 
 /* in_compat_syscall() is available */
 #define HAVE_IN_COMPAT_SYSCALL 1
 
+/* iov_iter_advance() is available */
+#define HAVE_IOV_ITER_ADVANCE 1
+
+/* iov_iter_count() is available */
+#define HAVE_IOV_ITER_COUNT 1
+
+/* iov_iter_fault_in_readable() is available */
+#define HAVE_IOV_ITER_FAULT_IN_READABLE 1
+
+/* iov_iter_init() is available */
+#define HAVE_IOV_ITER_INIT 1
+
+/* iov_iter_init() is available */
+/* #undef HAVE_IOV_ITER_INIT_LEGACY */
+
+/* iov_iter_revert() is available */
+#define HAVE_IOV_ITER_REVERT 1
+
+/* iov_iter types are available */
+#define HAVE_IOV_ITER_TYPES 1
+
 /* yes */
 #define HAVE_IO_SCHEDULE_TIMEOUT 1
 
-/* is_owner_or_cap() exists */
-/* #undef HAVE_IS_OWNER_OR_CAP */
+/* Define to 1 if you have the `issetugid' function. */
+/* #undef HAVE_ISSETUGID */
 
 /* kernel has kernel_fpu_* functions */
-/* #undef HAVE_KERNEL_FPU */
+#define HAVE_KERNEL_FPU 1
 
 /* kernel has asm/fpu/api.h */
 #define HAVE_KERNEL_FPU_API_HEADER 1
 
 /* kernel fpu internal */
-#define HAVE_KERNEL_FPU_INTERNAL 1
+/* #undef HAVE_KERNEL_FPU_INTERNAL */
 
 /* uncached_acl_sentinel() exists */
 #define HAVE_KERNEL_GET_ACL_HANDLE_CACHE 1
 
 /* kernel does stack verification */
 #define HAVE_KERNEL_OBJTOOL 1
+
+/* kernel has linux/objtool.h */
+/* #undef HAVE_KERNEL_OBJTOOL_HEADER */
 
 /* kernel_read() take loff_t pointer */
 #define HAVE_KERNEL_READ_PPOS 1
@@ -435,14 +339,8 @@
 /* kernel_write() take loff_t pointer */
 #define HAVE_KERNEL_WRITE_PPOS 1
 
-/* struct kmem_cache has allocflags */
-/* #undef HAVE_KMEM_CACHE_ALLOCFLAGS */
-
 /* kmem_cache_create_usercopy() exists */
 #define HAVE_KMEM_CACHE_CREATE_USERCOPY 1
-
-/* struct kmem_cache has gfpflags */
-/* #undef HAVE_KMEM_CACHE_GFPFLAGS */
 
 /* kstrtoul() exists */
 #define HAVE_KSTRTOUL 1
@@ -453,41 +351,29 @@
 /* ktime_get_raw_ts64() exists */
 #define HAVE_KTIME_GET_RAW_TS64 1
 
-/* kuid_t/kgid_t in use */
-#define HAVE_KUIDGID_T 1
-
-/* kuid_has_mapping/kgid_has_mapping exist */
-#define HAVE_KUID_HAS_MAPPING 1
-
-/* i_(uid|gid)_(read|write) exist */
-#define HAVE_KUID_HELPERS 1
+/* kvmalloc exists */
+#define HAVE_KVMALLOC 1
 
 /* kernel has large stacks */
 #define HAVE_LARGE_STACKS 1
 
-/* Define if you have libaio */
+/* Define if you have [aio] */
 #define HAVE_LIBAIO 1
 
-/* Define if you have libblkid */
+/* Define if you have [blkid] */
 #define HAVE_LIBBLKID 1
 
-/* Define if you have libssl */
-#define HAVE_LIBSSL 1
+/* Define if you have [crypto] */
+#define HAVE_LIBCRYPTO 1
 
-/* Define to 1 if you have the `tirpc' library (-ltirpc). */
+/* Define if you have [tirpc] */
 /* #undef HAVE_LIBTIRPC */
 
-/* Define if you have libudev */
+/* Define if you have [udev] */
 #define HAVE_LIBUDEV 1
 
-/* Define if udev_device_get_is_initialized is available */
-#define HAVE_LIBUDEV_UDEV_DEVICE_GET_IS_INITIALIZED 1
-
-/* Define if you have libuuid */
+/* Define if you have [uuid] */
 #define HAVE_LIBUUID 1
-
-/* iops->lookup() passes nameidata */
-/* #undef HAVE_LOOKUP_NAMEIDATA */
 
 /* lseek_execute() is available */
 /* #undef HAVE_LSEEK_EXECUTE */
@@ -497,9 +383,6 @@
 
 /* makedev() is declared in sys/sysmacros.h */
 #define HAVE_MAKEDEV_IN_SYSMACROS 1
-
-/* Noting that make_request_fn() returns int */
-/* #undef HAVE_MAKE_REQUEST_FN_RET_INT */
 
 /* Noting that make_request_fn() returns blk_qc_t */
 #define HAVE_MAKE_REQUEST_FN_RET_QC 1
@@ -516,20 +399,14 @@
 /* Define to 1 if you have the `mlockall' function. */
 #define HAVE_MLOCKALL 1
 
+/* lookup_bdev() wants mode arg */
+/* #undef HAVE_MODE_LOOKUP_BDEV */
+
 /* Define if host toolchain supports MOVBE */
 #define HAVE_MOVBE 1
 
 /* new_sync_read()/new_sync_write() are available */
 /* #undef HAVE_NEW_SYNC_READ */
-
-/* sops->nr_cached_objects() exists */
-/* #undef HAVE_NR_CACHED_OBJECTS */
-
-/* ns_capable exists */
-#define HAVE_NS_CAPABLE 1
-
-/* open_bdev_exclusive() is available */
-/* #undef HAVE_OPEN_BDEV_EXCLUSIVE */
 
 /* iops->getattr() takes a path */
 #define HAVE_PATH_IOPS_GETATTR 1
@@ -537,20 +414,11 @@
 /* Define if host toolchain supports PCLMULQDQ */
 #define HAVE_PCLMULQDQ 1
 
-/* PDE_DATA is available */
-#define HAVE_PDE_DATA 1
-
-/* iops->permission() exists */
-#define HAVE_PERMISSION 1
-
-/* iops->permission() with nameidata exists */
-/* #undef HAVE_PERMISSION_WITH_NAMEIDATA */
+/* percpu_counter_init() wants gfp_t */
+#define HAVE_PERCPU_COUNTER_INIT_WITH_GFP 1
 
 /* posix_acl_chmod() exists */
 /* #undef HAVE_POSIX_ACL_CHMOD */
-
-/* posix_acl_equiv_mode wants umode_t* */
-#define HAVE_POSIX_ACL_EQUIV_MODE_UMODE_T 1
 
 /* posix_acl_from_xattr() needs user_ns */
 #define HAVE_POSIX_ACL_FROM_XATTR_USERNS 1
@@ -559,7 +427,7 @@
 #define HAVE_POSIX_ACL_RELEASE 1
 
 /* posix_acl_release() is GPL-only */
-#define HAVE_POSIX_ACL_RELEASE_GPL_ONLY 1
+/* #undef HAVE_POSIX_ACL_RELEASE_GPL_ONLY */
 
 /* posix_acl_valid() wants user namespace */
 #define HAVE_POSIX_ACL_VALID_WITH_NS 1
@@ -585,8 +453,11 @@
 /* iops->rename() wants flags */
 #define HAVE_RENAME_WANTS_FLAGS 1
 
-/* REQ_FAILFAST_MASK is defined */
-#define HAVE_REQ_FAILFAST_MASK 1
+/* REQ_DISCARD is defined */
+/* #undef HAVE_REQ_DISCARD */
+
+/* REQ_FLUSH is defined */
+/* #undef HAVE_REQ_FLUSH */
 
 /* REQ_OP_DISCARD is defined */
 #define HAVE_REQ_OP_DISCARD 1
@@ -597,17 +468,26 @@
 /* REQ_OP_SECURE_ERASE is defined */
 #define HAVE_REQ_OP_SECURE_ERASE 1
 
+/* REQ_PREFLUSH is defined */
+#define HAVE_REQ_PREFLUSH 1
+
+/* revalidate_disk() is available */
+#define HAVE_REVALIDATE_DISK 1
+
+/* revalidate_disk_size() is available */
+/* #undef HAVE_REVALIDATE_DISK_SIZE */
+
 /* struct rw_semaphore has member activity */
 /* #undef HAVE_RWSEM_ACTIVITY */
 
 /* struct rw_semaphore has atomic_long_t member count */
 #define HAVE_RWSEM_ATOMIC_LONG_COUNT 1
 
-/* linux/sched/rt.h exists */
-#define HAVE_SCHED_RT_HEADER 1
-
 /* linux/sched/signal.h exists */
 #define HAVE_SCHED_SIGNAL_HEADER 1
+
+/* Define to 1 if you have the <security/pam_modules.h> header file. */
+/* #undef HAVE_SECURITY_PAM_MODULES_H */
 
 /* setattr_prepare() is available */
 #define HAVE_SETATTR_PREPARE 1
@@ -618,17 +498,11 @@
 /* set_cached_acl() is usable */
 #define HAVE_SET_CACHED_ACL_USABLE 1
 
-/* set_nlink() is available */
-#define HAVE_SET_NLINK 1
-
-/* sops->show_options() with dentry */
-#define HAVE_SHOW_OPTIONS_WITH_DENTRY 1
-
-/* struct super_block has s_shrink */
-/* #undef HAVE_SHRINK */
-
 /* struct shrink_control exists */
 #define HAVE_SHRINK_CONTROL_STRUCT 1
+
+/* new shrinker callback wants 2 args */
+/* #undef HAVE_SINGLE_SHRINKER_CALLBACK */
 
 /* ->count_objects exists */
 #define HAVE_SPLIT_SHRINKER_CALLBACK 1
@@ -672,6 +546,9 @@
 /* Define to 1 if you have the `strlcpy' function. */
 /* #undef HAVE_STRLCPY */
 
+/* submit_bio is member of struct block_device_operations */
+/* #undef HAVE_SUBMIT_BIO_IN_BLOCK_DEVICE_OPERATIONS */
+
 /* super_setup_bdi_name() exits */
 #define HAVE_SUPER_SETUP_BDI_NAME 1
 
@@ -684,12 +561,6 @@
 /* Define to 1 if you have the <sys/types.h> header file. */
 #define HAVE_SYS_TYPES_H 1
 
-/* struct super_block has s_d_op */
-#define HAVE_S_D_OP 1
-
-/* struct super_block has s_instances list_head */
-/* #undef HAVE_S_INSTANCES_LIST_HEAD */
-
 /* i_op->tmpfile() exists */
 #define HAVE_TMPFILE 1
 
@@ -699,17 +570,14 @@
 /* kernel has totalram_pages() */
 #define HAVE_TOTALRAM_PAGES_FUNC 1
 
-/* truncate_setsize() is available */
-#define HAVE_TRUNCATE_SETSIZE 1
+/* Define to 1 if you have the `udev_device_get_is_initialized' function. */
+#define HAVE_UDEV_DEVICE_GET_IS_INITIALIZED 1
 
 /* kernel has __kernel_fpu_* functions */
 /* #undef HAVE_UNDERSCORE_KERNEL_FPU */
 
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1
-
-/* usleep_range is available */
-#define HAVE_USLEEP_RANGE 1
 
 /* iops->getattr() takes a vfsmount */
 /* #undef HAVE_VFSMOUNT_IOPS_GETATTR */
@@ -726,6 +594,9 @@
 /* aops->direct_IO() uses iov_iter with rw and offset */
 /* #undef HAVE_VFS_DIRECT_IO_ITER_RW_OFFSET */
 
+/* All required iov_iter interfaces are available */
+#define HAVE_VFS_IOV_ITER 1
+
 /* fops->iterate() is available */
 /* #undef HAVE_VFS_ITERATE */
 
@@ -737,6 +608,9 @@
 
 /* fops->read/write_iter() are available */
 #define HAVE_VFS_RW_ITERATE 1
+
+/* __vmalloc page flags exists */
+#define HAVE_VMALLOC_PAGE_KERNEL 1
 
 /* yes */
 /* #undef HAVE_WAIT_ON_BIT_ACTION */
@@ -756,9 +630,6 @@
 /* xattr_handler->get() wants xattr_handler */
 /* #undef HAVE_XATTR_GET_HANDLER */
 
-/* xattr_handler->get() wants inode */
-/* #undef HAVE_XATTR_GET_INODE */
-
 /* xattr_handler has name */
 #define HAVE_XATTR_HANDLER_NAME 1
 
@@ -767,9 +638,6 @@
 
 /* xattr_handler->list() wants xattr_handler */
 /* #undef HAVE_XATTR_LIST_HANDLER */
-
-/* xattr_handler->list() wants inode */
-/* #undef HAVE_XATTR_LIST_INODE */
 
 /* xattr_handler->list() wants simple */
 #define HAVE_XATTR_LIST_SIMPLE 1
@@ -783,20 +651,14 @@
 /* xattr_handler->set() wants xattr_handler */
 /* #undef HAVE_XATTR_SET_HANDLER */
 
-/* xattr_handler->set() wants inode */
-/* #undef HAVE_XATTR_SET_INODE */
-
-/* Define if you have zlib */
+/* Define if you have [z] */
 #define HAVE_ZLIB 1
 
 /* __posix_acl_chmod() exists */
 #define HAVE___POSIX_ACL_CHMOD 1
 
-/* Define as const if the declaration of iconv() needs const. */
-#define ICONV_CONST 
-
 /* kernel exports FPU functions */
-/* #undef KERNEL_EXPORTS_X86_FPU */
+#define KERNEL_EXPORTS_X86_FPU 1
 
 /* Define to the sub-directory where libtool stores uninstalled libraries. */
 #define LT_OBJDIR ".libs/"
@@ -806,9 +668,6 @@
 
 /* hardened module_param_call */
 #define MODULE_PARAM_CALL_CONST 1
-
-/* struct rw_semaphore member wait_lock is raw_spinlock_t */
-#define RWSEM_SPINLOCK_IS_RAW 1
 
 /* struct shrink_control has nid */
 #define SHRINK_CONTROL_HAS_NID 1
@@ -821,6 +680,12 @@
 
 /* Defined for legacy compatibility. */
 #define SPL_META_VERSION ZFS_META_VERSION
+
+/* True if ZFS is to be compiled for a FreeBSD system */
+/* #undef SYSTEM_FREEBSD */
+
+/* True if ZFS is to be compiled for a Linux system */
+#define SYSTEM_LINUX 1
 
 /* zfs debugging enabled */
 /* #undef ZFS_DEBUG */
@@ -837,9 +702,6 @@
 /* enum node_stat_item contains NR_INACTIVE_FILE */
 #define ZFS_ENUM_NODE_STAT_ITEM_NR_INACTIVE_FILE 1
 
-/* enum node_stat_item contains NR_SLAB_RECLAIMABLE */
-#define ZFS_ENUM_NODE_STAT_ITEM_NR_SLAB_RECLAIMABLE 1
-
 /* enum zone_stat_item contains NR_FILE_PAGES */
 /* #undef ZFS_ENUM_ZONE_STAT_ITEM_NR_FILE_PAGES */
 
@@ -848,9 +710,6 @@
 
 /* enum zone_stat_item contains NR_INACTIVE_FILE */
 /* #undef ZFS_ENUM_ZONE_STAT_ITEM_NR_INACTIVE_FILE */
-
-/* enum zone_stat_item contains NR_SLAB_RECLAIMABLE */
-/* #undef ZFS_ENUM_ZONE_STAT_ITEM_NR_SLAB_RECLAIMABLE */
 
 /* global_node_page_state() exists */
 #define ZFS_GLOBAL_NODE_PAGE_STATE 1
@@ -862,19 +721,19 @@
 /* #undef ZFS_IS_GPL_COMPATIBLE */
 
 /* Define the project alias string. */
-#define ZFS_META_ALIAS "zfs-0.8.4-1"
+#define ZFS_META_ALIAS "zfs-2.0.1-mdl-1"
 
 /* Define the project author. */
-#define ZFS_META_AUTHOR "OpenZFS on Linux"
+#define ZFS_META_AUTHOR "OpenZFS"
 
 /* Define the project release date. */
 /* #undef ZFS_META_DATA */
 
 /* Define the maximum compatible kernel version. */
-#define ZFS_META_KVER_MAX "5.6"
+#define ZFS_META_KVER_MAX "5.10"
 
 /* Define the minimum compatible kernel version. */
-#define ZFS_META_KVER_MIN "2.6.32"
+#define ZFS_META_KVER_MIN "3.10"
 
 /* Define the project license. */
 #define ZFS_META_LICENSE "CDDL"
@@ -895,5 +754,8 @@
 #define ZFS_META_RELEASE "1"
 
 /* Define the project version. */
-#define ZFS_META_VERSION "0.8.4"
+#define ZFS_META_VERSION "2.0.1-mdl"
+
+/* count is located in percpu_ref.data */
+/* #undef ZFS_PERCPU_REF_COUNT_IN_DATA */
 

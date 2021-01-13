@@ -45,7 +45,6 @@
 #include <sys/zfs_znode.h>
 #include <sys/fs/zfs.h>
 #include <sys/zap.h>
-#include <sys/refcount.h>
 #include <sys/zap_impl.h>
 #include <sys/zap_leaf.h>
 
@@ -1030,7 +1029,7 @@ zap_value_search(objset_t *os, uint64_t zapobj, uint64_t value, uint64_t mask,
 	    (err = zap_cursor_retrieve(&zc, za)) == 0;
 	    zap_cursor_advance(&zc)) {
 		if ((za->za_first_integer & mask) == (value & mask)) {
-			(void) strcpy(name, za->za_name);
+			(void) strlcpy(name, za->za_name, MAXNAMELEN);
 			break;
 		}
 	}
@@ -1379,11 +1378,7 @@ fzap_get_stats(zap_t *zap, zap_stats_t *zs)
 	}
 }
 
-#if defined(_KERNEL)
 /* BEGIN CSTYLED */
-module_param(zap_iterate_prefetch, int, 0644);
-MODULE_PARM_DESC(zap_iterate_prefetch,
+ZFS_MODULE_PARAM(zfs, , zap_iterate_prefetch, INT, ZMOD_RW,
 	"When iterating ZAP object, prefetch it");
-
 /* END CSTYLED */
-#endif
