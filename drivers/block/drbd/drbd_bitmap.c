@@ -19,7 +19,6 @@
 #include <linux/slab.h>
 #include <linux/dynamic_debug.h>
 #include <linux/libnvdimm.h>
-#include <asm/kmap_types.h>
 
 #include "drbd_int.h"
 #include "drbd_dax_pmem.h"
@@ -366,8 +365,8 @@ static struct page **bm_realloc_pages(struct drbd_bitmap *b, unsigned long want)
 	new_pages = kzalloc(bytes, GFP_NOIO | __GFP_NOWARN);
 	if (!new_pages) {
 		new_pages = __vmalloc(bytes,
-				GFP_NOIO | __GFP_HIGHMEM | __GFP_ZERO,
-				PAGE_KERNEL);
+				      GFP_NOIO | __GFP_HIGHMEM | __GFP_ZERO,
+				      PAGE_KERNEL);
 		if (!new_pages)
 			return NULL;
 	}
@@ -712,7 +711,6 @@ ____bm_op(struct drbd_device *device, unsigned int bitmap_index, unsigned long s
 static __always_inline unsigned long
 __bm_op(struct drbd_device *device, unsigned int bitmap_index, unsigned long start, unsigned long end,
 	enum bitmap_operations op, __le32 *buffer)
-/* kmap compat: KM_IRQ1 */
 {
 	struct drbd_bitmap *bitmap = device->bitmap;
 
@@ -796,7 +794,6 @@ bm_op(struct drbd_device *device, unsigned int bitmap_index, unsigned long start
 /* you better not modify the bitmap while this is running,
  * or its results will be stale */
 static void bm_count_bits(struct drbd_device *device)
-/* kmap compat: KM_USER0 */
 {
 	struct drbd_bitmap *bitmap = device->bitmap;
 	unsigned int bitmap_index;
@@ -841,7 +838,6 @@ static u64 drbd_md_on_disk_bits(struct drbd_device *device)
  * Otherwise, the bitmap is initialized to all bits set.
  */
 int drbd_bm_resize(struct drbd_device *device, sector_t capacity, bool set_new_bits)
-/* kmap compat: KM_IRQ1 */
 {
 	struct drbd_bitmap *b = device->bitmap;
 	unsigned long bits, words, obits;
@@ -1073,9 +1069,9 @@ static void drbd_bm_aio_ctx_destroy(struct kref *kref)
 	struct drbd_bm_aio_ctx *ctx = container_of(kref, struct drbd_bm_aio_ctx, kref);
 	unsigned long flags;
 
-	spin_lock_irqsave(&ctx->device->resource->req_lock, flags);
+	spin_lock_irqsave(&ctx->device->pending_bmio_lock, flags);
 	list_del(&ctx->list);
-	spin_unlock_irqrestore(&ctx->device->resource->req_lock, flags);
+	spin_unlock_irqrestore(&ctx->device->pending_bmio_lock, flags);
 	put_ldev(ctx->device);
 	kfree(ctx);
 }
@@ -1249,9 +1245,9 @@ static int bm_rw_range(struct drbd_device *device,
 	if (end_page >= b->bm_number_of_pages)
 		end_page = b->bm_number_of_pages -1;
 
-	spin_lock_irq(&device->resource->req_lock);
+	spin_lock_irq(&device->pending_bmio_lock);
 	list_add_tail(&ctx->list, &device->pending_bitmap_io);
-	spin_unlock_irq(&device->resource->req_lock);
+	spin_unlock_irq(&device->pending_bmio_lock);
 
 	now = jiffies;
 
@@ -1329,7 +1325,7 @@ static int bm_rw_range(struct drbd_device *device,
 	}
 
 	if (ctx->error) {
-		drbd_alert(device, "we had at least one MD IO ERROR during bitmap IO\n");
+		drbd_err(device, "we had at least one MD IO ERROR during bitmap IO\n");
 		drbd_chk_io_error(device, 1, DRBD_META_IO_ERROR);
 		err = -EIO; /* ctx->error ? */
 	}
@@ -1469,7 +1465,6 @@ unsigned long drbd_bm_find_next(struct drbd_peer_device *peer_device, unsigned l
 /* does not spin_lock_irqsave.
  * you must take drbd_bm_lock() first */
 unsigned long _drbd_bm_find_next(struct drbd_peer_device *peer_device, unsigned long start)
-/* kmap compat: KM_USER0 */
 {
 	/* WARN_ON(!(device->b->bm_flags & BM_LOCK_SET)); */
 	return ____bm_op(peer_device->device, peer_device->bitmap_index, start, -1UL,
@@ -1477,7 +1472,6 @@ unsigned long _drbd_bm_find_next(struct drbd_peer_device *peer_device, unsigned 
 }
 
 unsigned long _drbd_bm_find_next_zero(struct drbd_peer_device *peer_device, unsigned long start)
-/* kmap compat: KM_USER0 */
 {
 	/* WARN_ON(!(device->b->bm_flags & BM_LOCK_SET)); */
 	return ____bm_op(peer_device->device, peer_device->bitmap_index, start, -1UL,
@@ -1601,7 +1595,6 @@ int drbd_bm_count_bits(struct drbd_device *device, unsigned int bitmap_index, un
 }
 
 void drbd_bm_copy_slot(struct drbd_device *device, unsigned int from_index, unsigned int to_index)
-/* kmap compat: KM_IRQ1 */
 {
 	struct drbd_bitmap *bitmap = device->bitmap;
 	unsigned long word_nr, from_word_nr, to_word_nr, words32_total;

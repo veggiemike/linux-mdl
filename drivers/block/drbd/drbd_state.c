@@ -78,8 +78,6 @@ static int w_after_state_change(struct drbd_work *w, int unused);
 static enum drbd_state_rv is_valid_soft_transition(struct drbd_resource *);
 static enum drbd_state_rv is_valid_transition(struct drbd_resource *resource);
 static void sanitize_state(struct drbd_resource *resource);
-static enum drbd_state_rv change_peer_state(struct drbd_connection *, int, union drbd_state,
-					    union drbd_state, unsigned long *);
 
 /* We need to stay consistent if we are neighbor of a diskless primary with
    different UUID. This function should be used if the device was D_UP_TO_DATE
@@ -146,7 +144,7 @@ static bool may_be_up_to_date(struct drbd_device *device, enum which_state which
 		case D_DISKLESS:
 			if (!(peer_md->flags & MDF_PEER_DEVICE_SEEN))
 				continue;
-		/* Fall through */
+			fallthrough;
 		case D_ATTACHING:
 		case D_DETACHING:
 		case D_FAILED:
@@ -207,7 +205,7 @@ static bool stable_up_to_date_neighbor(struct drbd_device *device)
  *
  * The caller either needs to have a get_ldev() reference, or need to call
  * this function only if disk_state[NOW] >= D_NEGOTIATING and holding the
- * req_lock
+ * state_rwlock.
  */
 enum drbd_disk_state disk_state_from_md(struct drbd_device *device) __must_hold(local)
 {
@@ -272,66 +270,69 @@ bool resource_is_suspended(struct drbd_resource *resource, enum which_state whic
 }
 
 static void count_objects(struct drbd_resource *resource,
-			  unsigned int *n_devices,
-			  unsigned int *n_connections)
+			  struct drbd_state_change_object_count *ocnt)
 {
-	/* Caller holds req_lock */
+	struct drbd_path *path;
 	struct drbd_device *device;
 	struct drbd_connection *connection;
 	int vnr;
 
-	*n_devices = 0;
-	*n_connections = 0;
+	lockdep_assert_held(&resource->state_rwlock);
+
+	ocnt->n_devices = 0;
+	ocnt->n_connections = 0;
+	ocnt->n_paths = 0;
 
 	idr_for_each_entry(&resource->devices, device, vnr)
-		(*n_devices)++;
-	for_each_connection(connection, resource)
-		(*n_connections)++;
+		ocnt->n_devices++;
+	for_each_connection(connection, resource) {
+		ocnt->n_connections++;
+		list_for_each_entry(path, &connection->transport.paths, list) {
+			ocnt->n_paths++;
+		}
+	}
 }
 
-static struct drbd_state_change *alloc_state_change(unsigned int n_devices, unsigned int n_connections, gfp_t flags)
+static struct drbd_state_change *alloc_state_change(struct drbd_state_change_object_count *ocnt, gfp_t flags)
 {
 	struct drbd_state_change *state_change;
-	unsigned int size, n;
+	unsigned int size;
 
 	size = sizeof(struct drbd_state_change) +
-	       n_devices * sizeof(struct drbd_device_state_change) +
-	       n_connections * sizeof(struct drbd_connection_state_change) +
-	       n_devices * n_connections * sizeof(struct drbd_peer_device_state_change);
-	state_change = kmalloc(size, flags);
+	       ocnt->n_devices * sizeof(struct drbd_device_state_change) +
+	       ocnt->n_connections * sizeof(struct drbd_connection_state_change) +
+	       ocnt->n_devices * ocnt->n_connections * sizeof(struct drbd_peer_device_state_change) +
+	       ocnt->n_paths * sizeof(struct drbd_path_state);
+	state_change = kzalloc(size, flags);
 	if (!state_change)
 		return NULL;
-	state_change->n_devices = n_devices;
-	state_change->n_connections = n_connections;
+	state_change->n_connections = ocnt->n_connections;
+	state_change->n_devices = ocnt->n_devices;
+	state_change->n_paths = ocnt->n_paths;
 	state_change->devices = (void *)(state_change + 1);
-	state_change->connections = (void *)&state_change->devices[n_devices];
-	state_change->peer_devices = (void *)&state_change->connections[n_connections];
-	state_change->resource->resource = NULL;
-	for (n = 0; n < n_devices; n++) {
-		state_change->devices[n].device = NULL;
-		state_change->devices[n].have_ldev = false;
-	}
-	for (n = 0; n < n_connections; n++)
-		state_change->connections[n].connection = NULL;
+	state_change->connections = (void *)&state_change->devices[ocnt->n_devices];
+	state_change->peer_devices = (void *)&state_change->connections[ocnt->n_connections];
+	state_change->paths = (void*)&state_change->peer_devices[ocnt->n_devices*ocnt->n_connections];
 	return state_change;
 }
 
 struct drbd_state_change *remember_state_change(struct drbd_resource *resource, gfp_t gfp)
 {
-	/* Caller holds req_lock */
 	struct drbd_state_change *state_change;
 	struct drbd_device *device;
-	unsigned int n_devices;
 	struct drbd_connection *connection;
-	unsigned int n_connections;
+	struct drbd_state_change_object_count ocnt;
 	int vnr;
 
 	struct drbd_device_state_change *device_state_change;
 	struct drbd_peer_device_state_change *peer_device_state_change;
 	struct drbd_connection_state_change *connection_state_change;
+	struct drbd_path_state *path_state; /* yes, not a _change :-( */
 
-	count_objects(resource, &n_devices, &n_connections);
-	state_change = alloc_state_change(n_devices, n_connections, gfp);
+	lockdep_assert_held(&resource->state_rwlock);
+
+	count_objects(resource, &ocnt);
+	state_change = alloc_state_change(&ocnt, gfp);
 	if (!state_change)
 		return NULL;
 
@@ -357,8 +358,6 @@ struct drbd_state_change *remember_state_change(struct drbd_resource *resource, 
 		       device->disk_state, sizeof(device->disk_state));
 		memcpy(device_state_change->have_quorum,
 		       device->have_quorum, sizeof(device->have_quorum));
-		if (test_and_clear_bit(HAVE_LDEV, &device->flags))
-			device_state_change->have_ldev = true;
 
 		/* The peer_devices for each device have to be enumerated in
 		   the order of the connections. We may not use for_each_peer_device() here. */
@@ -388,7 +387,10 @@ struct drbd_state_change *remember_state_change(struct drbd_resource *resource, 
 	}
 
 	connection_state_change = state_change->connections;
+	path_state = state_change->paths;
 	for_each_connection(connection, resource) {
+		struct drbd_path *path;
+
 		kref_get(&connection->kref);
 		kref_debug_get(&connection->kref_debug, 7);
 		connection_state_change->connection = connection;
@@ -398,6 +400,21 @@ struct drbd_state_change *remember_state_change(struct drbd_resource *resource, 
 		       connection->peer_role, sizeof(connection->peer_role));
 		memcpy(connection_state_change->susp_fen,
 		       connection->susp_fen, sizeof(connection->susp_fen));
+
+		list_for_each_entry(path, &connection->transport.paths, list) {
+			/* Share the connection kref with above.
+			 * Could also share the pointer, but would then need to
+			 * remember an additional n_paths per connection
+			 * count/offset (connection_state_change->n_paths++)
+			 * to be able to associate the paths with its connection.
+			 * So why not directly store the pointer here again. */
+			path_state->connection = connection;
+			kref_get(&path->kref);
+			path_state->path = path;
+			path_state->path_established = path->established;
+
+			path_state++;
+		}
 
 		connection_state_change++;
 	}
@@ -476,6 +493,12 @@ void forget_state_change(struct drbd_state_change *state_change)
 		if (connection) {
 			kref_debug_put(&connection->kref_debug, 7);
 			kref_put(&connection->kref, drbd_destroy_connection);
+		}
+	}
+	for (n = 0; n < state_change->n_paths; n++) {
+		struct drbd_path *path = state_change->paths[n].path;
+		if (path) {
+			kref_put(&path->kref, drbd_destroy_path);
 		}
 	}
 	kfree(state_change);
@@ -609,6 +632,8 @@ static void apply_update_to_exposed_data_uuid(struct drbd_resource *resource)
 void __clear_remote_state_change(struct drbd_resource *resource)
 {
 	struct drbd_connection *connection, *tmp;
+	bool is_connect = resource->twopc_reply.is_connect;
+	int initiator_node_id = resource->twopc_reply.initiator_node_id;
 
 	resource->remote_state_change = false;
 	resource->twopc_reply.initiator_node_id = -1;
@@ -616,6 +641,8 @@ void __clear_remote_state_change(struct drbd_resource *resource)
 	del_timer(&resource->queued_twopc_timer);
 
 	list_for_each_entry_safe(connection, tmp, &resource->twopc_parents, twopc_parent_list) {
+		if (is_connect && connection->peer_node_id == initiator_node_id)
+			abort_connect(connection);
 		kref_debug_put(&connection->kref_debug, 9);
 		kref_put(&connection->kref, drbd_destroy_connection);
 	}
@@ -653,12 +680,7 @@ static bool state_is_stable(struct drbd_device *device)
 		case L_BEHIND:
 		case L_STARTING_SYNC_S:
 		case L_STARTING_SYNC_T:
-			break;
-
-			/* Allow IO in BM exchange states with new protocols */
 		case L_WF_BITMAP_S:
-			if (peer_device->connection->agreed_pro_version < 96)
-				stable = false;
 			break;
 
 			/* no new io accepted in these states */
@@ -800,7 +822,7 @@ void state_change_lock(struct drbd_resource *resource, unsigned long *irq_flags,
 			"worker should not initiate state changes with CS_SERIALIZE\n");
 		down(&resource->state_sem);
 	}
-	spin_lock_irqsave(&resource->req_lock, *irq_flags);
+	write_lock_irqsave(&resource->state_rwlock, *irq_flags);
 	resource->state_change_flags = flags;
 }
 
@@ -809,7 +831,7 @@ static void __state_change_unlock(struct drbd_resource *resource, unsigned long 
 	enum chg_state_flags flags = resource->state_change_flags;
 
 	resource->state_change_flags = 0;
-	spin_unlock_irqrestore(&resource->req_lock, *irq_flags);
+	write_unlock_irqrestore(&resource->state_rwlock, *irq_flags);
 	if (done && expect(resource, current != resource->worker.task))
 		wait_for_completion(done);
 	if ((flags & CS_SERIALIZE) && !(flags & (CS_ALREADY_SERIALIZED | CS_PREPARE)))
@@ -850,24 +872,6 @@ void begin_state_change(struct drbd_resource *resource, unsigned long *irq_flags
 	__begin_state_change(resource);
 }
 
-static bool all_peer_devices_connected(struct drbd_connection *connection)
-{
-	struct drbd_peer_device *peer_device;
-	int vnr;
-	bool rv = true;
-
-	rcu_read_lock();
-	idr_for_each_entry(&connection->peer_devices, peer_device, vnr) {
-		if (peer_device->repl_state[NOW] < L_ESTABLISHED) {
-			rv = false;
-			break;
-		}
-	}
-	rcu_read_unlock();
-
-	return rv;
-}
-
 static enum drbd_state_rv __end_state_change(struct drbd_resource *resource,
 					     unsigned long *irq_flags,
 					     enum drbd_state_rv rv)
@@ -904,7 +908,7 @@ void abort_state_change_locked(struct drbd_resource *resource)
 static void begin_remote_state_change(struct drbd_resource *resource, unsigned long *irq_flags)
 {
 	rcu_read_unlock();
-	spin_unlock_irqrestore(&resource->req_lock, *irq_flags);
+	write_unlock_irqrestore(&resource->state_rwlock, *irq_flags);
 }
 
 static void __end_remote_state_change(struct drbd_resource *resource, enum chg_state_flags flags)
@@ -916,16 +920,16 @@ static void __end_remote_state_change(struct drbd_resource *resource, enum chg_s
 
 static void end_remote_state_change(struct drbd_resource *resource, unsigned long *irq_flags, enum chg_state_flags flags)
 {
-	spin_lock_irqsave(&resource->req_lock, *irq_flags);
+	write_lock_irqsave(&resource->state_rwlock, *irq_flags);
 	__end_remote_state_change(resource, flags);
 }
 
 void clear_remote_state_change(struct drbd_resource *resource) {
 	unsigned long irq_flags;
 
-	spin_lock_irqsave(&resource->req_lock, irq_flags);
+	write_lock_irqsave(&resource->state_rwlock, irq_flags);
 	__clear_remote_state_change(resource);
-	spin_unlock_irqrestore(&resource->req_lock, irq_flags);
+	write_unlock_irqrestore(&resource->state_rwlock, irq_flags);
 }
 
 static union drbd_state drbd_get_resource_state(struct drbd_resource *resource, enum which_state which)
@@ -963,7 +967,7 @@ union drbd_state drbd_get_peer_device_state(struct drbd_peer_device *peer_device
 	rv = drbd_get_device_state(peer_device->device, which);
 	rv.user_isp = peer_device->resync_susp_user[which];
 	rv.peer_isp = peer_device->resync_susp_peer[which];
-	rv.aftr_isp = peer_device->resync_susp_dependency[which] || peer_device->resync_susp_other_c[which];
+	rv.aftr_isp = resync_susp_comb_dep(peer_device, which);
 	rv.conn = combined_conn_state(peer_device, which);
 	rv.peer = connection->peer_role[which];
 	rv.pdsk = peer_device->disk_state[which];
@@ -1034,8 +1038,7 @@ static bool resync_suspended(struct drbd_peer_device *peer_device, enum which_st
 {
 	return peer_device->resync_susp_user[which] ||
 	       peer_device->resync_susp_peer[which] ||
-	       peer_device->resync_susp_dependency[which] ||
-	       peer_device->resync_susp_other_c[which];
+	       resync_susp_comb_dep(peer_device, which);
 }
 
 static void set_resync_susp_other_c(struct drbd_peer_device *peer_device, bool val, bool start)
@@ -1062,6 +1065,8 @@ static void set_resync_susp_other_c(struct drbd_peer_device *peer_device, bool v
 
 			if (r == L_SYNC_SOURCE)
 				p->repl_state[NEW] = L_PAUSED_SYNC_S;
+			else if (r == L_SYNC_TARGET)
+				p->repl_state[NEW] = L_PAUSED_SYNC_T;
 		}
 	} else {
 		for_each_peer_device(p, device) {
@@ -1095,6 +1100,7 @@ static int scnprintf_resync_suspend_flags(char *buffer, size_t size,
 					  struct drbd_peer_device *peer_device,
 					  enum which_state which)
 {
+	struct drbd_device *device = peer_device->device;
 	char *b = buffer, *end = buffer + size;
 
 	if (!resync_suspended(peer_device, which))
@@ -1108,6 +1114,9 @@ static int scnprintf_resync_suspend_flags(char *buffer, size_t size,
 		b += scnprintf(b, end - b, "after dependency,");
 	if (peer_device->resync_susp_other_c[which])
 		b += scnprintf(b, end - b, "connection dependency,");
+	if (is_sync_source_state(peer_device, which) && device->disk_state[which] <= D_INCONSISTENT)
+		b += scnprintf(b, end - b, "disk inconsistent,");
+
 	*(--b) = 0;
 
 	return b - buffer;
@@ -1234,8 +1243,14 @@ static bool local_disk_may_be_outdated(struct drbd_device *device, enum which_st
 {
 	struct drbd_peer_device *peer_device;
 
-	if (device->resource->role[which] == R_PRIMARY)
+	if (device->resource->role[which] == R_PRIMARY) {
+		for_each_peer_device(peer_device, device) {
+			if (peer_device->disk_state[which] == D_UP_TO_DATE &&
+			    peer_device->repl_state[which] == L_WF_BITMAP_T)
+				return true;
+		}
 		return false;
+	}
 
 	for_each_peer_device(peer_device, device) {
 		if (peer_device->connection->peer_role[which] == R_PRIMARY &&
@@ -1680,11 +1695,6 @@ handshake_found:
 					return SS_NO_VERIFY_ALG;
 			}
 
-			if (!(repl_state[OLD] == L_VERIFY_S || repl_state[OLD] == L_VERIFY_T) &&
-			     (repl_state[NEW] == L_VERIFY_S || repl_state[NEW] == L_VERIFY_T) &&
-				  peer_device->connection->agreed_pro_version < 88)
-				return SS_NOT_SUPPORTED;
-
 			if (repl_state[OLD] == L_SYNC_SOURCE && repl_state[NEW] == L_WF_BITMAP_S)
 				return SS_RESYNC_RUNNING;
 
@@ -1827,6 +1837,8 @@ static void select_best_resync_source(struct drbd_peer_device *candidate_pd)
 	long diff_w, candidate_w, current_w;
 
 	for_each_peer_device_rcu(current_pd, device) {
+		if (current_pd == candidate_pd)
+			continue;
 		if (current_pd->repl_state[NEW] == L_SYNC_TARGET)
 			goto found_pd;
 	}
@@ -1977,14 +1989,46 @@ static void sanitize_state(struct drbd_resource *resource)
 				clear_bit(RECONCILIATION_RESYNC, &peer_device->flags);
 			}
 
-			/* D_CONSISTENT vanish when we get connected (pre 9.0) */
-			if (connection->agreed_pro_version < 110 &&
-			    repl_state[NEW] >= L_ESTABLISHED && repl_state[NEW] < L_AHEAD) {
-				if (disk_state[NEW] == D_CONSISTENT)
-					disk_state[NEW] = D_UP_TO_DATE;
-				if (peer_disk_state[NEW] == D_CONSISTENT)
-					peer_disk_state[NEW] = D_UP_TO_DATE;
+			/* Suspend IO while fence-peer handler runs (peer lost) */
+			if (connection->fencing_policy == FP_STONITH &&
+			    (role[NEW] == R_PRIMARY &&
+			     repl_state[NEW] < L_ESTABLISHED &&
+			     peer_disk_state[NEW] == D_UNKNOWN) &&
+			    (role[OLD] != R_PRIMARY ||
+			     peer_disk_state[OLD] != D_UNKNOWN))
+				connection->susp_fen[NEW] = true;
+
+			/* Pause a SyncSource until it finishes resync as target on other connections */
+			if (repl_state[OLD] != L_SYNC_SOURCE && repl_state[NEW] == L_SYNC_SOURCE &&
+			    is_sync_target_other_c(peer_device))
+				peer_device->resync_susp_other_c[NEW] = true;
+
+			if (peer_device->resync_susp_other_c[NEW] &&
+			    repl_state[NEW] == L_SYNC_TARGET)
+				select_best_resync_source(peer_device);
+
+			if (resync_suspended(peer_device, NEW)) {
+				if (repl_state[NEW] == L_SYNC_SOURCE)
+					repl_state[NEW] = L_PAUSED_SYNC_S;
+				if (repl_state[NEW] == L_SYNC_TARGET)
+					repl_state[NEW] = L_PAUSED_SYNC_T;
+			} else {
+				if (repl_state[NEW] == L_PAUSED_SYNC_S)
+					repl_state[NEW] = L_SYNC_SOURCE;
+				if (repl_state[NEW] == L_PAUSED_SYNC_T)
+					repl_state[NEW] = L_SYNC_TARGET;
 			}
+
+			/* This needs to be after the previous block, since we should not set
+			   the bit if we are paused ourselves */
+			if (repl_state[OLD] != L_SYNC_TARGET && repl_state[NEW] == L_SYNC_TARGET)
+				set_resync_susp_other_c(peer_device, true, false);
+			if (repl_state[OLD] == L_SYNC_TARGET && repl_state[NEW] != L_SYNC_TARGET)
+				set_resync_susp_other_c(peer_device, false, false);
+
+			/* Implication of the repl state on other peer's repl state */
+			if (repl_state[OLD] != L_STARTING_SYNC_T && repl_state[NEW] == L_STARTING_SYNC_T)
+				set_resync_susp_other_c(peer_device, true, true);
 
 			/* Implications of the repl state on the disk states */
 			min_disk_state = D_DISKLESS;
@@ -2002,14 +2046,14 @@ static void sanitize_state(struct drbd_resource *resource)
 			case L_BEHIND:
 				min_disk_state = D_INCONSISTENT;
 				max_disk_state = D_OUTDATED;
-				min_peer_disk_state = D_OUTDATED;
+				min_peer_disk_state = D_INCONSISTENT;
 				max_peer_disk_state = D_UP_TO_DATE;
 				break;
 			case L_VERIFY_S:
 			case L_VERIFY_T:
-				min_disk_state = D_UP_TO_DATE;
+				min_disk_state = D_INCONSISTENT;
 				max_disk_state = D_UP_TO_DATE;
-				min_peer_disk_state = D_UP_TO_DATE;
+				min_peer_disk_state = D_INCONSISTENT;
 				max_peer_disk_state = D_UP_TO_DATE;
 				break;
 			case L_ESTABLISHED:
@@ -2053,47 +2097,6 @@ static void sanitize_state(struct drbd_resource *resource)
 
 			if (peer_disk_state[NEW] < min_peer_disk_state)
 				peer_disk_state[NEW] = min_peer_disk_state;
-
-			/* Suspend IO while fence-peer handler runs (peer lost) */
-			if (connection->fencing_policy == FP_STONITH &&
-			    (role[NEW] == R_PRIMARY &&
-			     repl_state[NEW] < L_ESTABLISHED &&
-			     peer_disk_state[NEW] == D_UNKNOWN) &&
-			    (role[OLD] != R_PRIMARY ||
-			     peer_disk_state[OLD] != D_UNKNOWN))
-				connection->susp_fen[NEW] = true;
-
-			/* Pause a SyncSource until it finishes resync as target on other connections */
-			if (repl_state[OLD] != L_SYNC_SOURCE && repl_state[NEW] == L_SYNC_SOURCE &&
-			    is_sync_target_other_c(peer_device))
-				peer_device->resync_susp_other_c[NEW] = true;
-
-			if (peer_device->resync_susp_other_c[NEW] &&
-			    repl_state[NEW] == L_SYNC_TARGET)
-				select_best_resync_source(peer_device);
-
-			if (resync_suspended(peer_device, NEW)) {
-				if (repl_state[NEW] == L_SYNC_SOURCE)
-					repl_state[NEW] = L_PAUSED_SYNC_S;
-				if (repl_state[NEW] == L_SYNC_TARGET)
-					repl_state[NEW] = L_PAUSED_SYNC_T;
-			} else {
-				if (repl_state[NEW] == L_PAUSED_SYNC_S)
-					repl_state[NEW] = L_SYNC_SOURCE;
-				if (repl_state[NEW] == L_PAUSED_SYNC_T)
-					repl_state[NEW] = L_SYNC_TARGET;
-			}
-
-			/* This needs to be after the previous block, since we should not set
-			   the bit if we are paused ourselves */
-			if (repl_state[OLD] != L_SYNC_TARGET && repl_state[NEW] == L_SYNC_TARGET)
-				set_resync_susp_other_c(peer_device, true, false);
-			if (repl_state[OLD] == L_SYNC_TARGET && repl_state[NEW] != L_SYNC_TARGET)
-				set_resync_susp_other_c(peer_device, false, false);
-
-			/* Implication of the repl state on other peer's repl state */
-			if (repl_state[OLD] != L_STARTING_SYNC_T && repl_state[NEW] == L_STARTING_SYNC_T)
-				set_resync_susp_other_c(peer_device, true, true);
 
 			/* A detach is a cluster wide transaction. The peer_disk_state updates
 			   are coming in while we have it prepared. When the cluster wide
@@ -2207,8 +2210,6 @@ static void set_ov_position(struct drbd_peer_device *peer_device,
 			    enum drbd_repl_state repl_state)
 {
 	struct drbd_device *device = peer_device->device;
-	if (peer_device->connection->agreed_pro_version < 90)
-		peer_device->ov_start_sector = 0;
 	peer_device->rs_total = drbd_bm_bits(device);
 	peer_device->ov_position = 0;
 	if (repl_state == L_VERIFY_T) {
@@ -2235,9 +2236,10 @@ static void set_ov_position(struct drbd_peer_device *peer_device,
 static void queue_after_state_change_work(struct drbd_resource *resource,
 					  struct completion *done)
 {
-	/* Caller holds req_lock */
 	struct after_state_change_work *work;
 	gfp_t gfp = GFP_ATOMIC;
+
+	lockdep_assert_held(&resource->state_rwlock);
 
 	work = kmalloc(sizeof(*work), gfp);
 	if (work)
@@ -2298,6 +2300,13 @@ static bool primary_and_data_present(struct drbd_device *device)
 	}
 
 	return primary && up_to_date_data;
+}
+
+static bool extra_ldev_ref_for_after_state_chg(enum drbd_disk_state *disk_state)
+{
+	return (disk_state[OLD] != D_FAILED && disk_state[NEW] == D_FAILED) ||
+	       (disk_state[OLD] != D_DETACHING && disk_state[NEW] == D_DETACHING) ||
+	       (disk_state[OLD] != D_DISKLESS && disk_state[NEW] == D_DISKLESS);
 }
 
 /**
@@ -2364,12 +2373,8 @@ static void finish_state_change(struct drbd_resource *resource, struct completio
 		 * on the ldev here, to be sure the transition -> D_DISKLESS resp.
 		 * drbd_ldev_destroy() won't happen before our corresponding
 		 * w_after_state_change works run, where we put_ldev again. */
-		if ((disk_state[OLD] != D_FAILED && disk_state[NEW] == D_FAILED) ||
-		    (disk_state[OLD] != D_DETACHING && disk_state[NEW] == D_DETACHING) ||
-		    (disk_state[OLD] != D_DISKLESS && disk_state[NEW] == D_DISKLESS)) {
+		if (extra_ldev_ref_for_after_state_chg(disk_state))
 			atomic_inc(&device->local_cnt);
-			BUG_ON(test_and_set_bit(HAVE_LDEV, &device->flags));
-		}
 
 		if (disk_state[OLD] != D_DISKLESS && disk_state[NEW] == D_DISKLESS) {
 			/* who knows if we are ever going to be attached again,
@@ -2381,16 +2386,6 @@ static void finish_state_change(struct drbd_resource *resource, struct completio
 
 		if (disk_state[OLD] == D_ATTACHING && disk_state[NEW] >= D_NEGOTIATING)
 			drbd_info(device, "attached to current UUID: %016llX\n", device->ldev->md.current_uuid);
-
-		for_each_peer_device(peer_device, device) {
-			enum drbd_repl_state *repl_state = peer_device->repl_state;
-			struct drbd_connection *connection = peer_device->connection;
-
-			/* Wake up role changes, that were delayed because of connection establishing */
-			if (repl_state[OLD] == L_OFF && repl_state[NEW] != L_OFF &&
-			    all_peer_devices_connected(connection))
-				clear_bit(INITIAL_STATE_SENT, &peer_device->flags);
-		}
 
 		for_each_peer_device(peer_device, device) {
 			enum drbd_repl_state *repl_state = peer_device->repl_state;
@@ -2514,11 +2509,6 @@ static void finish_state_change(struct drbd_resource *resource, struct completio
 				if (role[NEW] == R_PRIMARY && !test_bit(UNREGISTERED, &device->flags) &&
 				    drbd_data_accessible(device, NEW))
 					create_new_uuid = true;
-
-				if (connection->agreed_pro_version < 110 &&
-				    peer_role[NEW] == R_PRIMARY &&
-				    disk_state[NEW] >= D_UP_TO_DATE)
-					create_new_uuid = true;
 			}
 			if (peer_returns_diskless(peer_device, peer_disk_state[OLD], peer_disk_state[NEW])) {
 				if (role[NEW] == R_PRIMARY && !test_bit(UNREGISTERED, &device->flags) &&
@@ -2532,6 +2522,9 @@ static void finish_state_change(struct drbd_resource *resource, struct completio
 
 			if (peer_disk_state[NEW] < D_UP_TO_DATE && test_bit(GOT_NEG_ACK, &peer_device->flags))
 				clear_bit(GOT_NEG_ACK, &peer_device->flags);
+
+			if (repl_state[OLD] > L_ESTABLISHED && repl_state[NEW] <= L_ESTABLISHED)
+				clear_bit(SYNC_SRC_CRASHED_PRI, &peer_device->flags);
 		}
 
 		for_each_connection(connection, resource) {
@@ -2643,10 +2636,8 @@ static void finish_state_change(struct drbd_resource *resource, struct completio
 		    disk_state[NEW] > D_NEGOTIATING)
 			device->last_reattach_jif = jiffies;
 
-		if (!device->have_quorum[OLD] && device->have_quorum[NEW]) {
+		if (!device->have_quorum[OLD] && device->have_quorum[NEW])
 			clear_bit(PRIMARY_LOST_QUORUM, &device->flags);
-			clear_bit(NEW_CUR_UUID, &device->flags);
-		}
 	}
 
 	for_each_connection(connection, resource) {
@@ -2668,16 +2659,6 @@ static void finish_state_change(struct drbd_resource *resource, struct completio
 
 		if (cstate[OLD] == C_CONNECTED && cstate[NEW] < C_CONNECTED)
 			twopc_connection_down(connection);
-
-		if (cstate[NEW] < C_CONNECTED) {
-			struct drbd_peer_device *peer_device;
-
-			idr_for_each_entry(&connection->peer_devices, peer_device, vnr) {
-				clear_bit(INITIAL_STATE_SENT, &peer_device->flags);
-				clear_bit(INITIAL_STATE_RECEIVED, &peer_device->flags);
-				clear_bit(INITIAL_STATE_PROCESSED, &peer_device->flags);
-			}
-		}
 
 		/* remember last connect time so request_timer_fn() won't
 		 * kill newly established sessions while we are still trying to thaw
@@ -2739,10 +2720,7 @@ static void abw_start_sync(struct drbd_device *device,
 			initialize_resync(pd);
 		rcu_read_unlock();
 
-		if (peer_device->connection->agreed_pro_version < 110)
-			stable_change_repl_state(peer_device, L_WF_SYNC_UUID, CS_VERBOSE);
-		else
-			drbd_start_resync(peer_device, L_SYNC_TARGET);
+		drbd_start_resync(peer_device, L_SYNC_TARGET);
 		break;
 	case L_STARTING_SYNC_S:
 		drbd_start_resync(peer_device, L_SYNC_SOURCE);
@@ -2815,6 +2793,23 @@ static bool state_change_is_susp_quorum(struct drbd_state_change *state_change,
 	return false;
 }
 
+static bool resync_susp_comb_dep_sc(struct drbd_state_change *state_change,
+				    unsigned int n_device, int n_connection,
+				    enum which_state which)
+{
+	struct drbd_peer_device_state_change *peer_device_state_change =
+		&state_change->peer_devices[n_device * state_change->n_connections + n_connection];
+	struct drbd_device_state_change *device_state_change = &state_change->devices[n_device];
+	bool resync_susp_dependency = peer_device_state_change->resync_susp_dependency[which];
+	bool resync_susp_other_c = peer_device_state_change->resync_susp_other_c[which];
+	enum drbd_repl_state repl_state = peer_device_state_change->repl_state[which];
+	enum drbd_disk_state disk_state = device_state_change->disk_state[which];
+
+	return resync_susp_dependency || resync_susp_other_c ||
+		((repl_state == L_SYNC_SOURCE || repl_state == L_PAUSED_SYNC_S)
+		 && disk_state <= D_INCONSISTENT);
+}
+
 static union drbd_state state_change_word(struct drbd_state_change *state_change,
 					  unsigned int n_device, int n_connection,
 					  enum which_state which)
@@ -2848,8 +2843,7 @@ static union drbd_state state_change_word(struct drbd_state_change *state_change
 		if (state.conn <= L_OFF)
 			state.conn = connection_state_change->cstate[which];
 		state.pdsk = peer_device_state_change->disk_state[which];
-		state.aftr_isp = peer_device_state_change->resync_susp_dependency[which] ||
-			peer_device_state_change->resync_susp_other_c[which];
+		state.aftr_isp = resync_susp_comb_dep_sc(state_change, n_device, n_connection, which);
 		state.peer_isp = peer_device_state_change->resync_susp_peer[which];
 		state.user_isp = peer_device_state_change->resync_susp_user[which];
 	}
@@ -2871,7 +2865,7 @@ void notify_resource_state_change(struct sk_buff *skb,
 		.res_susp_quorum = state_change_is_susp_quorum(state_change, NEW),
 	};
 
-	notify_resource_state(skb, seq, resource, &resource_info, type);
+	notify_resource_state(skb, seq, resource, &resource_info, NULL, type);
 }
 
 void notify_connection_state_change(struct sk_buff *skb,
@@ -2895,27 +2889,19 @@ void notify_device_state_change(struct sk_buff *skb,
 {
 	struct drbd_device *device = device_state_change->device;
 	struct device_info device_info;
-
-	device_to_info(&device_info, device);
+	device_state_change_to_info(&device_info, device_state_change);
 
 	notify_device_state(skb, seq, device, &device_info, type);
 }
 
 void notify_peer_device_state_change(struct sk_buff *skb,
 				     unsigned int seq,
-				     struct drbd_peer_device_state_change *p,
+				     struct drbd_peer_device_state_change *state_change,
 				     enum drbd_notification_type type)
 {
-	struct drbd_peer_device *peer_device = p->peer_device;
-	/* THINK maybe unify with peer_device_to_info */
-	struct peer_device_info peer_device_info = {
-		.peer_repl_state = p->repl_state[NEW],
-		.peer_disk_state = p->disk_state[NEW],
-		.peer_resync_susp_user = p->resync_susp_user[NEW],
-		.peer_resync_susp_peer = p->resync_susp_peer[NEW],
-		.peer_resync_susp_dependency = p->resync_susp_dependency[NEW] || p->resync_susp_other_c[NEW],
-		.peer_is_intentional_diskless = !want_bitmap(peer_device),
-	};
+	struct drbd_peer_device *peer_device = state_change->peer_device;
+	struct peer_device_info peer_device_info;
+	peer_device_state_change_to_info(&peer_device_info, state_change);
 
 	notify_peer_device_state(skb, seq, peer_device, &peer_device_info, type);
 }
@@ -3007,30 +2993,14 @@ static void send_role_to_all_peers(struct drbd_state_change *state_change)
 			&state_change->connections[n_connection];
 		struct drbd_connection *connection = connection_state_change->connection;
 		enum drbd_conn_state new_cstate = connection_state_change->cstate[NEW];
+		union drbd_state state = { {
+			.role = state_change->resource[0].role[NEW],
+		} };
 
 		if (new_cstate < C_CONNECTED)
 			continue;
 
-		if (connection->agreed_pro_version < 110) {
-			unsigned int n_device;
-
-			/* Before DRBD 9, the role is a device attribute
-			 * instead of a resource attribute. */
-			for (n_device = 0; n_device < state_change->n_devices; n_device++) {
-				struct drbd_peer_device *peer_device =
-					state_change->peer_devices[n_connection].peer_device;
-				union drbd_state state =
-					state_change_word(state_change, n_device, n_connection, NEW);
-
-				drbd_send_state(peer_device, state);
-			}
-		} else {
-			union drbd_state state = { {
-				.role = state_change->resource[0].role[NEW],
-			} };
-
-			conn_send_state(connection, state);
-		}
+		conn_send_state(connection, state);
 	}
 }
 
@@ -3050,6 +3020,14 @@ static void send_new_state_to_all_peer_devices(struct drbd_state_change *state_c
 	}
 }
 
+static bool receiver_exited_main_loop(struct drbd_connection *connection)
+{
+	enum drbd_conn_state cstate = connection->cstate[NOW];
+
+	return cstate == C_STANDALONE || cstate == C_UNCONNECTED ||
+		cstate == C_CONNECTING || cstate == C_CONNECTED;
+}
+
 void drbd_notify_peers_lost_primary(struct drbd_resource *resource)
 {
 	struct drbd_connection *connection, *lost_peer;
@@ -3066,6 +3044,7 @@ void drbd_notify_peers_lost_primary(struct drbd_resource *resource)
 	return;
 found:
 
+	wait_event(resource->state_wait, receiver_exited_main_loop(lost_peer));
 	for_each_connection_ref(connection, im, resource) {
 		if (connection == lost_peer)
 			continue;
@@ -3237,7 +3216,6 @@ static int w_after_state_change(struct drbd_work *w, int unused)
 	int n_device, n_connection;
 	bool still_connected = false;
 	bool try_become_up_to_date = false;
-	bool resync_finished = false;
 
 	notify_state_change(state_change);
 
@@ -3245,10 +3223,12 @@ static int w_after_state_change(struct drbd_work *w, int unused)
 		struct drbd_device_state_change *device_state_change = &state_change->devices[n_device];
 		struct drbd_device *device = device_state_change->device;
 		enum drbd_disk_state *disk_state = device_state_change->disk_state;
+		bool have_ldev = extra_ldev_ref_for_after_state_chg(disk_state);
 		bool *have_quorum = device_state_change->have_quorum;
 		bool effective_disk_size_determined = false;
 		bool one_peer_disk_up_to_date[2] = { };
 		bool device_stable[2], resync_target[2];
+		bool resync_finished = false;
 		enum which_state which;
 
 		for (which = OLD; which <= NEW; which++) {
@@ -3295,17 +3275,23 @@ static int w_after_state_change(struct drbd_work *w, int unused)
 			bool *resync_susp_user = peer_device_state_change->resync_susp_user;
 			bool *resync_susp_peer = peer_device_state_change->resync_susp_peer;
 			bool *resync_susp_dependency = peer_device_state_change->resync_susp_dependency;
-			bool *resync_susp_other_c = peer_device_state_change->resync_susp_other_c;
 			union drbd_state new_state =
 				state_change_word(state_change, n_device, n_connection, NEW);
-			bool send_state = false;
+			bool send_uuids, send_state = false;
 
 			/* In case we finished a resync as resync-target update all neighbors
 			   about having a bitmap_uuid of 0 towards the previous sync-source.
 			   That needs to go out before sending the new disk state
 			   (To avoid a race where the other node might downgrade our disk
 			   state due to old UUID valued) */
-			if (resync_finished && peer_disk_state[NEW] != D_UNKNOWN)
+			send_uuids = resync_finished && peer_disk_state[NEW] != D_UNKNOWN;
+
+			/* Send UUIDs again if they changed while establishing the connection */
+			if (repl_state[OLD] == L_OFF && repl_state[NEW] > L_OFF &&
+			    peer_device->comm_current_uuid != drbd_resolved_uuid(peer_device, NULL))
+				send_uuids = true;
+
+			if (send_uuids)
 				drbd_send_uuids(peer_device, 0, 0);
 
 			if (peer_disk_state[NEW] == D_UP_TO_DATE)
@@ -3345,21 +3331,9 @@ static int w_after_state_change(struct drbd_work *w, int unused)
 				}
 			}
 
-			/* Became sync source.  With protocol >= 96, we still need to send out
-			 * the sync uuid now. Need to do that before any drbd_send_state, or
-			 * the other side may go "paused sync" before receiving the sync uuids,
-			 * which is unexpected. */
-			if (!(repl_state[OLD] == L_SYNC_SOURCE || repl_state[OLD] == L_PAUSED_SYNC_S) &&
-			     (repl_state[NEW] == L_SYNC_SOURCE || repl_state[NEW] == L_PAUSED_SYNC_S) &&
-			    connection->agreed_pro_version >= 96 && connection->agreed_pro_version < 110 &&
-			    get_ldev(device)) {
-				drbd_gen_and_send_sync_uuid(peer_device);
-				put_ldev(device);
-			}
-
 			/* Do not change the order of the if above and the two below... */
-			if (peer_disk_state[OLD] == D_DISKLESS &&
-			    peer_disk_state[NEW] > D_DISKLESS && peer_disk_state[NEW] != D_UNKNOWN) {      /* attach on the peer */
+			if (peer_disk_state[OLD] < D_NEGOTIATING &&
+			    peer_disk_state[NEW] == D_NEGOTIATING) { /* attach on the peer */
 				/* we probably will start a resync soon.
 				 * make sure those things are properly reset. */
 				peer_device->rs_total = 0;
@@ -3420,9 +3394,9 @@ static int w_after_state_change(struct drbd_work *w, int unused)
 
 			/* We want to pause/continue resync, tell peer. */
 			if (repl_state[NEW] >= L_ESTABLISHED &&
-			     ((resync_susp_dependency[OLD] != resync_susp_dependency[NEW]) ||
-			      (resync_susp_other_c[OLD] != resync_susp_other_c[NEW]) ||
-			      (resync_susp_user[OLD] != resync_susp_user[NEW])))
+			    ((resync_susp_comb_dep_sc(state_change, n_device, n_connection, OLD) !=
+			      resync_susp_comb_dep_sc(state_change, n_device, n_connection, NEW)) ||
+			     (resync_susp_user[OLD] != resync_susp_user[NEW])))
 				send_state = true;
 
 			/* finished resync, tell sync source */
@@ -3513,8 +3487,7 @@ static int w_after_state_change(struct drbd_work *w, int unused)
 			/* Verify finished, or reached stop sector.  Peer did not know about
 			 * the stop sector, and we may even have changed the stop sector during
 			 * verify to interrupt/stop early.  Send the new state. */
-			if (repl_state[OLD] == L_VERIFY_S && repl_state[NEW] == L_ESTABLISHED
-			    && verify_can_do_stop_sector(peer_device))
+			if (repl_state[OLD] == L_VERIFY_S && repl_state[NEW] == L_ESTABLISHED)
 				send_new_state_to_all_peer_devices(state_change, n_device);
 
 			if (disk_state[NEW] == D_DISKLESS &&
@@ -3565,7 +3538,7 @@ static int w_after_state_change(struct drbd_work *w, int unused)
 				drbd_uuid_new_current(device, false);
 			}
 
-			if (repl_state[NEW] == L_VERIFY_S && get_ldev(device)) {
+			if (repl_state[OLD] != L_VERIFY_S && repl_state[NEW] == L_VERIFY_S && get_ldev(device)) {
 				drbd_info(peer_device, "Starting Online Verify from sector %llu\n",
 						(unsigned long long)peer_device->ov_position);
 				mod_timer(&peer_device->resync_timer, jiffies);
@@ -3577,7 +3550,7 @@ static int w_after_state_change(struct drbd_work *w, int unused)
 		 * if a local disk is attached and either the local disk state
 		 * or a peer disk state is D_UP_TO_DATE.  */
 		if (effective_disk_size_determined && get_ldev(device)) {
-			sector_t size = drbd_get_capacity(device->this_bdev);
+			sector_t size = get_capacity(device->vdisk);
 			if (device->ldev->md.effective_size != size) {
 				char ppb[10];
 
@@ -3599,7 +3572,7 @@ static int w_after_state_change(struct drbd_work *w, int unused)
 			/* Our cleanup here with the transition to D_DISKLESS.
 			 * It is still not safe to dereference ldev here, since
 			 * we might come from an failed Attach before ldev was set. */
-			if (expect(device, device_state_change->have_ldev) && device->ldev) {
+			if (have_ldev && device->ldev) {
 				rcu_read_lock();
 				eh = rcu_dereference(device->ldev->disk_conf)->on_io_error;
 				rcu_read_unlock();
@@ -3663,11 +3636,11 @@ static int w_after_state_change(struct drbd_work *w, int unused)
 			/* we may need to cancel the md_sync timer */
 			del_timer_sync(&device->md_sync_timer);
 
-			if (expect(device, device_state_change->have_ldev))
+			if (have_ldev)
 				send_new_state_to_all_peer_devices(state_change, n_device);
 		}
 
-		if (device_state_change->have_ldev)
+		if (have_ldev)
 			put_ldev(device);
 
 		/* Notify peers that I had a local IO error and did not detach. */
@@ -3743,45 +3716,13 @@ static bool local_state_change(enum chg_state_flags flags)
 	return flags & (CS_HARD | CS_LOCAL_ONLY);
 }
 
-static enum drbd_state_rv
-__peer_request(struct drbd_connection *connection, int vnr,
-	       union drbd_state mask, union drbd_state val)
-{
-	enum drbd_state_rv rv = SS_SUCCESS;
-
-	if (connection->cstate[NOW] == C_CONNECTED) {
-		enum drbd_packet cmd = (vnr == -1) ? P_CONN_ST_CHG_REQ : P_STATE_CHG_REQ;
-		if (!conn_send_state_req(connection, vnr, cmd, mask, val)) {
-			set_bit(TWOPC_PREPARED, &connection->flags);
-			rv = SS_CW_SUCCESS;
-		}
-	}
-	return rv;
-}
-
-static enum drbd_state_rv __peer_reply(struct drbd_connection *connection)
-{
-	if (test_and_clear_bit(TWOPC_NO, &connection->flags))
-		return SS_CW_FAILED_BY_PEER;
-	if (test_and_clear_bit(TWOPC_YES, &connection->flags) ||
-	    !test_bit(TWOPC_PREPARED, &connection->flags))
-		return SS_CW_SUCCESS;
-
-	/* This is DRBD 9.x <-> 8.4 compat code.
-	 * Consistent with __peer_request() above:
-	 * No more connection: fake success. */
-	if (connection->cstate[NOW] != C_CONNECTED)
-		return SS_SUCCESS;
-	return SS_UNKNOWN_ERROR;
-}
-
 static bool when_done_lock(struct drbd_resource *resource,
 			   unsigned long *irq_flags)
 {
-	spin_lock_irqsave(&resource->req_lock, *irq_flags);
+	write_lock_irqsave(&resource->state_rwlock, *irq_flags);
 	if (!resource->remote_state_change && resource->twopc_work.cb == NULL)
 		return true;
-	spin_unlock_irqrestore(&resource->req_lock, *irq_flags);
+	write_unlock_irqrestore(&resource->state_rwlock, *irq_flags);
 	return false;
 }
 
@@ -3813,33 +3754,6 @@ static void complete_remote_state_change(struct drbd_resource *resource,
 }
 
 static enum drbd_state_rv
-change_peer_state(struct drbd_connection *connection, int vnr,
-		  union drbd_state mask, union drbd_state val, unsigned long *irq_flags)
-{
-	struct drbd_resource *resource = connection->resource;
-	enum chg_state_flags flags = resource->state_change_flags | CS_TWOPC;
-	enum drbd_state_rv rv;
-
-	if (!expect(resource, flags & CS_SERIALIZE))
-		return SS_CW_FAILED_BY_PEER;
-
-	complete_remote_state_change(resource, irq_flags);
-
-	resource->remote_state_change = true;
-	resource->twopc_reply.initiator_node_id = resource->res_opts.node_id;
-	resource->twopc_reply.tid = 0;
-	begin_remote_state_change(resource, irq_flags);
-	rv = __peer_request(connection, vnr, mask, val);
-	if (rv == SS_CW_SUCCESS) {
-		wait_event(resource->state_wait,
-			((rv = __peer_reply(connection)) != SS_UNKNOWN_ERROR));
-		clear_bit(TWOPC_PREPARED, &connection->flags);
-	}
-	end_remote_state_change(resource, irq_flags, flags);
-	return rv;
-}
-
-static enum drbd_state_rv
 __cluster_wide_request(struct drbd_resource *resource, int vnr, enum drbd_packet cmd,
 		       struct p_twopc_request *request, u64 reach_immediately)
 {
@@ -3852,8 +3766,6 @@ __cluster_wide_request(struct drbd_resource *resource, int vnr, enum drbd_packet
 
 		clear_bit(TWOPC_PREPARED, &connection->flags);
 
-		if (connection->agreed_pro_version < 110)
-			continue;
 		mask = NODE_MASK(connection->peer_node_id);
 		if (reach_immediately & mask)
 			set_bit(TWOPC_PREPARED, &connection->flags);
@@ -3874,34 +3786,59 @@ __cluster_wide_request(struct drbd_resource *resource, int vnr, enum drbd_packet
 	return rv;
 }
 
+bool drbd_twopc_between_peer_and_me(struct drbd_connection *connection)
+{
+	struct drbd_resource *resource = connection->resource;
+	struct twopc_reply *o = &resource->twopc_reply;
+
+	return (o->target_node_id == resource->res_opts.node_id &&
+		o->initiator_node_id == connection->peer_node_id) ||
+		(o->target_node_id == connection->peer_node_id &&
+		 o->initiator_node_id == resource->res_opts.node_id);
+}
+
 bool cluster_wide_reply_ready(struct drbd_resource *resource)
 {
 	struct drbd_connection *connection;
-	bool ready = true;
+	bool connect_ready = true;
+	bool have_no = resource->twopc_reply.state_change_failed;
+	bool have_retry = false;
+	bool all_yes = true;
 
 	if (test_bit(TWOPC_ABORT_LOCAL, &resource->flags))
-		return ready;
+		return true;
 
 	rcu_read_lock();
 	for_each_connection_rcu(connection, resource) {
+		if (connection->agreed_pro_version >= 118 &&
+				!idr_is_empty(&resource->devices) &&
+				resource->twopc_reply.is_connect &&
+				drbd_twopc_between_peer_and_me(connection) &&
+				!test_bit(CONN_HANDSHAKE_READY, &connection->flags))
+			connect_ready = false;
+
 		if (!test_bit(TWOPC_PREPARED, &connection->flags))
 			continue;
-		if (test_bit(TWOPC_NO, &connection->flags) ||
-		    test_bit(TWOPC_RETRY, &connection->flags)) {
-			ready = true;
-			break;
-		}
+		if (test_bit(TWOPC_NO, &connection->flags))
+			have_no = true;
+		if (test_bit(TWOPC_RETRY, &connection->flags))
+			have_retry = true;
 		if (!test_bit(TWOPC_YES, &connection->flags))
-			ready = false;
+			all_yes = false;
 	}
 	rcu_read_unlock();
-	return ready;
+
+	return have_retry || (connect_ready && (have_no || all_yes));
 }
 
 static enum drbd_state_rv get_cluster_wide_reply(struct drbd_resource *resource,
 						 struct change_context *context)
 {
 	struct drbd_connection *connection, *failed_by = NULL;
+	bool handshake_disconnect = false;
+	bool handshake_retry = false;
+	bool have_no = resource->twopc_reply.state_change_failed;
+	bool have_retry = false;
 	enum drbd_state_rv rv = SS_CW_SUCCESS;
 
 	if (test_bit(TWOPC_ABORT_LOCAL, &resource->flags))
@@ -3909,86 +3846,74 @@ static enum drbd_state_rv get_cluster_wide_reply(struct drbd_resource *resource,
 
 	rcu_read_lock();
 	for_each_connection_rcu(connection, resource) {
+		if (resource->twopc_reply.is_connect &&
+				drbd_twopc_between_peer_and_me(connection)) {
+			if (test_bit(CONN_HANDSHAKE_DISCONNECT, &connection->flags))
+				handshake_disconnect = true;
+			if (test_bit(CONN_HANDSHAKE_RETRY, &connection->flags))
+				handshake_retry = true;
+		}
+
 		if (!test_bit(TWOPC_PREPARED, &connection->flags))
 			continue;
 		if (test_bit(TWOPC_NO, &connection->flags)) {
 			failed_by = connection;
-			rv = SS_CW_FAILED_BY_PEER;
+			have_no = true;
 		}
-		if (test_bit(TWOPC_RETRY, &connection->flags)) {
-			rv = SS_CONCURRENT_ST_CHG;
-			break;
-		}
+		if (test_bit(TWOPC_RETRY, &connection->flags))
+			have_retry = true;
 	}
-	if (rv == SS_CW_FAILED_BY_PEER && context)
-		_drbd_state_err(context, "Declined by peer %s (id: %d), see the kernel log there",
-			       rcu_dereference((failed_by)->transport.net_conf)->name,
-			       failed_by->peer_node_id);
-	rcu_read_unlock();
-	return rv;
-}
 
-static bool supports_two_phase_commit(struct drbd_resource *resource)
-{
-	struct drbd_connection *connection;
-	bool supported = true;
-
-	rcu_read_lock();
-	for_each_connection_rcu(connection, resource) {
-		if (connection->cstate[NOW] != C_CONNECTED)
-			continue;
-		if (connection->agreed_pro_version < 110) {
-			supported = false;
-			break;
-		}
-	}
-	rcu_read_unlock();
-
-	return supported;
-}
-
-static struct drbd_connection *get_first_connection(struct drbd_resource *resource)
-{
-	struct drbd_connection *connection = NULL;
-
-	rcu_read_lock();
-	if (!list_empty(&resource->connections)) {
-		connection = first_connection(resource);
-		kref_get(&connection->kref);
-	}
-	rcu_read_unlock();
-	return connection;
-}
-
-/* Think: Can this be replaced by a call to __is_valid_soft_transition() */
-static enum drbd_state_rv primary_nodes_allowed(struct drbd_resource *resource)
-{
-	struct drbd_connection *connection;
-	enum drbd_state_rv rv = SS_SUCCESS;
-
-	rcu_read_lock();
-	for_each_connection_rcu(connection, resource) {
-		u64 mask;
-
-		/* If this peer is primary as well, the config must allow it. */
-		mask = NODE_MASK(connection->peer_node_id);
-		if ((resource->twopc_reply.primary_nodes & mask) &&
-		    !(connection->transport.net_conf->two_primaries)) {
-			rv = SS_TWO_PRIMARIES;
-			break;
-		}
+	if (have_retry)
+		rv = SS_CONCURRENT_ST_CHG;
+	else if (handshake_retry)
+		rv = SS_HANDSHAKE_RETRY;
+	else if (handshake_disconnect)
+		rv = SS_HANDSHAKE_DISCONNECT;
+	else if (have_no) {
+		if (context)
+			_drbd_state_err(context, "Declined by peer %s (id: %d), see the kernel log there",
+					rcu_dereference((failed_by)->transport.net_conf)->name,
+					failed_by->peer_node_id);
+		rv = SS_CW_FAILED_BY_PEER;
 	}
 	rcu_read_unlock();
 	return rv;
+}
+
+/* That two_primaries is a connection option is one of those things of
+   the past, that should be cleaned up!! it should be a resource config!
+   Here is a inaccurate heuristic */
+static bool multiple_primaries_allowed(struct drbd_resource *resource)
+{
+	struct drbd_connection *connection;
+	bool allowed = false;
+	struct net_conf *nc;
+
+	rcu_read_lock();
+	for_each_connection_rcu(connection, resource) {
+		nc = rcu_dereference(connection->transport.net_conf);
+		if (nc && nc->two_primaries) {
+			allowed = true;
+			break;
+		}
+	}
+	rcu_read_unlock();
+
+	return allowed;
 }
 
 static enum drbd_state_rv
 check_primaries_distances(struct drbd_resource *resource)
 {
 	struct twopc_reply *reply = &resource->twopc_reply;
+	int nr_primaries = hweight64(reply->primary_nodes);
 	u64 common_server;
-	int node_id;
 
+	if (nr_primaries <= 1)
+		return SS_SUCCESS;
+	if (nr_primaries > 1 && !multiple_primaries_allowed(resource))
+		return SS_TWO_PRIMARIES;
 	/* All primaries directly connected. Good */
 	if (!(reply->primary_nodes & reply->weak_nodes))
 		return SS_SUCCESS;
@@ -3998,6 +3923,7 @@ check_primaries_distances(struct drbd_resource *resource)
 	   hypervisors. */
 	common_server = ~reply->weak_nodes;
 	if (common_server) {
+		int node_id;
 		/* Only allow if the new primary is diskless. See also far_away_change()
 		   in drbd_receiver.c for the diskless check on the other primary */
 		if ((reply->primary_nodes & NODE_MASK(resource->res_opts.node_id)) &&
@@ -4079,6 +4005,22 @@ long twopc_retry_timeout(struct drbd_resource *resource, int retries)
 		timeout = prandom_u32() % timeout;
 	}
 	return timeout;
+}
+
+void abort_connect(struct drbd_connection *connection)
+{
+	struct drbd_peer_device *peer_device;
+	int vnr;
+
+	rcu_read_lock();
+	idr_for_each_entry(&connection->peer_devices, peer_device, vnr) {
+		if (test_and_clear_bit(HOLDING_UUID_READ_LOCK, &peer_device->flags))
+			up_read_non_owner(&peer_device->device->uuid_sem);
+		clear_bit(INITIAL_STATE_SENT, &peer_device->flags);
+		clear_bit(INITIAL_STATE_RECEIVED, &peer_device->flags);
+		clear_bit(INITIAL_STATE_PROCESSED, &peer_device->flags);
+	}
+	rcu_read_unlock();
 }
 
 static void twopc_phase2(struct drbd_resource *resource, int vnr,
@@ -4174,20 +4116,6 @@ change_cluster_wide_state(bool (*change)(struct change_context *, enum change_ph
 		/* Really a cluster-wide state change. */
 	}
 
-	if (!supports_two_phase_commit(resource)) {
-		connection = get_first_connection(resource);
-		rv = SS_SUCCESS;
-		if (connection) {
-			kref_debug_get(&connection->kref_debug, 6);
-			rv = change_peer_state(connection, context->vnr, context->mask, context->val, &irq_flags);
-			kref_debug_put(&connection->kref_debug, 6);
-			kref_put(&connection->kref, drbd_destroy_connection);
-		}
-		if (rv >= SS_SUCCESS)
-			change(context, PH_84_COMMIT);
-		return __end_state_change(resource, &irq_flags, rv);
-	}
-
 	if (!expect(resource, context->flags & CS_SERIALIZE)) {
 		rv = SS_CW_FAILED_BY_PEER;
 		return __end_state_change(resource, &irq_flags, rv);
@@ -4210,6 +4138,8 @@ change_cluster_wide_state(bool (*change)(struct change_context *, enum change_ph
 	complete_remote_state_change(resource, &irq_flags);
 	start_time = jiffies;
 	resource->state_change_err_str = context->err_str;
+
+	*reply = (struct twopc_reply) { 0 };
 
 	reach_immediately = directly_connected_nodes(resource, NOW);
 	if (context->target_node_id != -1) {
@@ -4252,7 +4182,7 @@ change_cluster_wide_state(bool (*change)(struct change_context *, enum change_ph
 	request.mask = cpu_to_be32(context->mask.i);
 	request.val = cpu_to_be32(context->val.i);
 
-	drbd_info(resource, "Preparing cluster-wide state change %u (%u->%d %u/%u)",
+	drbd_info(resource, "Preparing cluster-wide state change %u (%u->%d %u/%u)\n",
 		  be32_to_cpu(request.tid),
 		  resource->res_opts.node_id,
 		  context->target_node_id,
@@ -4263,14 +4193,16 @@ change_cluster_wide_state(bool (*change)(struct change_context *, enum change_ph
 	resource->twopc_type = TWOPC_STATE_CHANGE;
 	reply->initiator_node_id = resource->res_opts.node_id;
 	reply->target_node_id = context->target_node_id;
-	reply->primary_nodes = 0;
-	reply->weak_nodes = 0;
 
 	reply->reachable_nodes = directly_connected_nodes(resource, NOW) |
 				       NODE_MASK(resource->res_opts.node_id);
 	if (context->mask.conn == conn_MASK && context->val.conn == C_CONNECTED) {
 		reply->reachable_nodes |= NODE_MASK(context->target_node_id);
 		reply->target_reachable_nodes = reply->reachable_nodes;
+		reply->is_connect = 1;
+		clear_bit(CONN_HANDSHAKE_DISCONNECT, &target_connection->flags);
+		clear_bit(CONN_HANDSHAKE_RETRY, &target_connection->flags);
+		clear_bit(CONN_HANDSHAKE_READY, &target_connection->flags);
 	} else if (context->mask.conn == conn_MASK && context->val.conn == C_DISCONNECTING) {
 		reply->target_reachable_nodes = NODE_MASK(context->target_node_id);
 		reply->reachable_nodes &= ~reply->target_reachable_nodes;
@@ -4284,12 +4216,19 @@ change_cluster_wide_state(bool (*change)(struct change_context *, enum change_ph
 				    &request, reach_immediately);
 	have_peers = rv == SS_CW_SUCCESS;
 	if (have_peers) {
-		if (wait_event_timeout(resource->state_wait,
-				       cluster_wide_reply_ready(resource),
-				       twopc_timeout(resource)))
+		long t;
+
+		if (context->mask.conn == conn_MASK && context->val.conn == C_CONNECTED &&
+		    target_connection->agreed_pro_version >= 118)
+			conn_connect2(target_connection);
+
+		t = wait_event_interruptible_timeout(resource->state_wait,
+						     cluster_wide_reply_ready(resource),
+						     twopc_timeout(resource));
+		if (t > 0)
 			rv = get_cluster_wide_reply(resource, context);
 		else
-			rv = SS_TIMEOUT;
+			rv = t == 0 ? SS_TIMEOUT : SS_INTERRUPTED;
 
 		if (rv == SS_CW_SUCCESS) {
 			u64 directly_reachable =
@@ -4311,11 +4250,9 @@ change_cluster_wide_state(bool (*change)(struct change_context *, enum change_ph
 			drbd_info(resource, "State change %u: primary_nodes=%lX, weak_nodes=%lX\n",
 				  reply->tid, (unsigned long)reply->primary_nodes,
 				  (unsigned long)reply->weak_nodes);
-			if (context->mask.role == role_MASK && context->val.role == R_PRIMARY)
-				rv = primary_nodes_allowed(resource);
-			if (rv >= SS_SUCCESS &&
-			    ((context->mask.role == role_MASK && context->val.role == R_PRIMARY) ||
-			     (context->mask.conn == conn_MASK && context->val.conn == C_CONNECTED)))
+
+			if ((context->mask.role == role_MASK && context->val.role == R_PRIMARY) ||
+			    (context->mask.conn == conn_MASK && context->val.conn == C_CONNECTED))
 				rv = check_primaries_distances(resource);
 
 			if (rv >= SS_SUCCESS &&
@@ -4346,9 +4283,17 @@ change_cluster_wide_state(bool (*change)(struct change_context *, enum change_ph
 				}
 				rcu_read_unlock();
 			}
+
 			request.primary_nodes = cpu_to_be64(reply->primary_nodes);
 		}
+
+		if (context->mask.conn == conn_MASK && context->val.conn == C_CONNECTED &&
+		    target_connection->agreed_pro_version >= 118)
+			wait_initial_states_received(target_connection);
 	}
+
+	if (rv < SS_SUCCESS && target_connection)
+		abort_connect(target_connection);
 
 	if ((rv == SS_TIMEOUT || rv == SS_CONCURRENT_ST_CHG) &&
 	    !(context->flags & CS_DONT_RETRY)) {
@@ -4378,8 +4323,10 @@ change_cluster_wide_state(bool (*change)(struct change_context *, enum change_ph
 			  jiffies_to_msecs(jiffies - start_time),
 			  rv);
 
-	if (have_peers && context->change_local_state_last)
+	if (have_peers && context->change_local_state_last) {
+		set_bit(TWOPC_STATE_CHANGE_PENDING, &resource->flags);
 		twopc_phase2(resource, context->vnr, rv >= SS_SUCCESS, &request, reach_immediately);
+	}
 
 	if (context->flags & CS_INHIBIT_MD_IO) {
 		struct drbd_device *device =
@@ -4388,6 +4335,7 @@ change_cluster_wide_state(bool (*change)(struct change_context *, enum change_ph
 	}
 
 	end_remote_state_change(resource, &irq_flags, context->flags | CS_TWOPC);
+	clear_bit(TWOPC_STATE_CHANGE_PENDING, &resource->flags);
 	if (rv >= SS_SUCCESS) {
 		change(context, PH_COMMIT);
 		if (target_connection &&
@@ -4446,6 +4394,7 @@ retry:
 		return DS_2PC_NOT_SUPPORTED;
 
 	state_change_lock(resource, &irq_flags, CS_VERBOSE | CS_LOCAL_ONLY);
+	rcu_read_lock();
 	complete_remote_state_change(resource, &irq_flags);
 	start_time = jiffies;
 	reach_immediately = directly_connected_nodes(resource, NOW);
@@ -4471,6 +4420,7 @@ retry:
 	reply->max_possible_size = local_max_size;
 	reply->reachable_nodes = reach_immediately | NODE_MASK(resource->res_opts.node_id);
 	reply->target_reachable_nodes = reply->reachable_nodes;
+	rcu_read_unlock();
 	state_change_unlock(resource, &irq_flags);
 
 	drbd_info(resource, "Preparing cluster-wide state change %u "
@@ -4507,7 +4457,7 @@ retry:
 
 	if (rv >= SS_SUCCESS) {
 		new_size = min_not_zero(reply->max_possible_size, new_user_size);
-		commit_it = new_size != drbd_get_capacity(device->this_bdev);
+		commit_it = new_size != get_capacity(device->vdisk);
 
 		if (commit_it) {
 			request.exposed_size = cpu_to_be64(new_size);
@@ -4559,7 +4509,7 @@ static void twopc_end_nested(struct drbd_resource *resource, enum drbd_packet cm
 	struct twopc_reply twopc_reply;
 	LIST_HEAD(parents);
 
-	spin_lock_irq(&resource->req_lock);
+	write_lock_irq(&resource->state_rwlock);
 	twopc_reply = resource->twopc_reply;
 	if (twopc_reply.tid) {
 		resource->twopc_prepare_reply_cmd = cmd;
@@ -4567,7 +4517,7 @@ static void twopc_end_nested(struct drbd_resource *resource, enum drbd_packet cm
 	}
 	if (as_work)
 		resource->twopc_work.cb = NULL;
-	spin_unlock_irq(&resource->req_lock);
+	write_unlock_irq(&resource->state_rwlock);
 
 	if (!twopc_reply.tid)
 		return;
@@ -4596,7 +4546,7 @@ int nested_twopc_work(struct drbd_work *work, int cancel)
 	rv = get_cluster_wide_reply(resource, NULL);
 	if (rv >= SS_SUCCESS)
 		cmd = P_TWOPC_YES;
-	else if (rv == SS_CONCURRENT_ST_CHG)
+	else if (rv == SS_CONCURRENT_ST_CHG || rv == SS_HANDSHAKE_RETRY)
 		cmd = P_TWOPC_RETRY;
 	else
 		cmd = P_TWOPC_NO;
@@ -4610,20 +4560,22 @@ nested_twopc_request(struct drbd_resource *resource, int vnr, enum drbd_packet c
 {
 	enum drbd_state_rv rv;
 	u64 nodes_to_reach, reach_immediately;
+	bool have_peers;
 
-	spin_lock_irq(&resource->req_lock);
+	write_lock_irq(&resource->state_rwlock);
 	nodes_to_reach = be64_to_cpu(request->nodes_to_reach);
 	reach_immediately = directly_connected_nodes(resource, NOW) & nodes_to_reach;
 	nodes_to_reach &= ~(reach_immediately | NODE_MASK(resource->res_opts.node_id));
 	request->nodes_to_reach = cpu_to_be64(nodes_to_reach);
-	spin_unlock_irq(&resource->req_lock);
+	write_unlock_irq(&resource->state_rwlock);
 
 	rv = __cluster_wide_request(resource, vnr, cmd, request, reach_immediately);
+	have_peers = rv == SS_CW_SUCCESS;
 	if (cmd == P_TWOPC_PREPARE || cmd == P_TWOPC_PREP_RSZ) {
-		if (rv <= SS_SUCCESS) {
-			cmd = (rv == SS_SUCCESS) ? P_TWOPC_YES : P_TWOPC_NO;
-			twopc_end_nested(resource, cmd, false);
-		}
+		if (rv < SS_SUCCESS)
+			twopc_end_nested(resource, P_TWOPC_NO, false);
+		else if (!have_peers && cluster_wide_reply_ready(resource)) /* no nested nodes */
+			nested_twopc_work(&resource->twopc_work, false);
 	}
 	return rv;
 }
@@ -4636,6 +4588,15 @@ static bool has_up_to_date_peer_disks(struct drbd_device *device)
 		if (peer_device->disk_state[NEW] == D_UP_TO_DATE)
 			return true;
 	return false;
+}
+
+static void disconnect_where_resync_target(struct drbd_device *device)
+{
+	struct drbd_peer_device *peer_device;
+
+	for_each_peer_device(peer_device, device)
+		if (is_sync_target_state(peer_device, NEW))
+			__change_cstate(peer_device->connection, C_TEAR_DOWN);
 }
 
 struct change_role_context {
@@ -4664,6 +4625,7 @@ static void __change_role(struct change_role_context *role_context)
 				/* adding it to the context so that it gets sent to the peers */
 				role_context->context.mask.disk |= disk_MASK;
 				role_context->context.val.disk |= D_UP_TO_DATE;
+				disconnect_where_resync_target(device);
 			}
 		}
 	}
@@ -4799,7 +4761,7 @@ static bool device_has_peer_devices_with_disk(struct drbd_device *device)
 		if (peer_device->connection->cstate[NOW] == C_CONNECTED) {
 			/* We expect to receive up-to-date UUIDs soon.
 			   To avoid a race in receive_state, "clear" uuids while
-			   holding req_lock. I.e. atomic with the state change */
+			   holding state_rwlock. I.e. atomic with the state change */
 			peer_device->uuids_received = false;
 			if (peer_device->disk_state[NOW] > D_DISKLESS &&
 			    peer_device->disk_state[NOW] != D_UNKNOWN)
@@ -4882,8 +4844,7 @@ static bool do_change_disk_state(struct change_context *context, enum change_pha
 		if (device_has_peer_devices_with_disk(device)) {
 			struct drbd_connection *connection =
 				first_connection(device->resource);
-			cluster_wide_state_change =
-				connection && connection->agreed_pro_version >= 110;
+			cluster_wide_state_change = !!connection;
 		} else {
 			/* very last part of attach */
 			context->val.disk = disk_state_from_md(device);
@@ -4997,6 +4958,9 @@ void apply_connect(struct drbd_connection *connection, bool commit)
 	struct drbd_peer_device *peer_device;
 	int vnr;
 
+	if (!commit || connection->cstate[NEW] != C_CONNECTED)
+		return;
+
 	idr_for_each_entry(&connection->peer_devices, peer_device, vnr) {
 		struct drbd_device *device = peer_device->device;
 		union drbd_state s = peer_device->connect_state;
@@ -5007,6 +4971,9 @@ void apply_connect(struct drbd_connection *connection, bool commit)
 			__change_repl_state(peer_device, s.conn);
 		__change_peer_disk_state(peer_device, s.pdsk);
 		__change_resync_susp_peer(peer_device, s.peer_isp);
+
+		if (s.conn == L_OFF)
+			__change_cstate(connection, C_DISCONNECTING);
 
 		if (commit) {
 			set_bit(INITIAL_STATE_PROCESSED, &peer_device->flags);
@@ -5046,9 +5013,11 @@ static bool do_change_cstate(struct change_context *context, enum change_phase p
 			}
 		}
 	}
-	__change_cstate_and_outdate(connection,
-				    context->val.conn,
-				    cstate_context->outdate_what);
+	if ((context->val.conn == C_CONNECTED && connection->cstate[NEW] == C_CONNECTING) ||
+	    context->val.conn != C_CONNECTED)
+		__change_cstate_and_outdate(connection,
+					    context->val.conn,
+					    cstate_context->outdate_what);
 
 	if (context->val.conn == C_CONNECTED &&
 	    connection->agreed_pro_version >= 117)

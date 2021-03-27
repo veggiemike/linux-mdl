@@ -230,13 +230,13 @@ GENL_struct(DRBD_NLA_RESOURCE_INFO, 15, resource_info,
 	__flg_field(3, 0, res_susp_nod)
 	__flg_field(4, 0, res_susp_fen)
 	__flg_field(5, 0, res_susp_quorum)
-	__u32_field(6, 0, res_promotion_score)
 )
 
 GENL_struct(DRBD_NLA_DEVICE_INFO, 16, device_info,
 	__u32_field(1, 0, dev_disk_state)
 	__flg_field(2, 0, is_intentional_diskless)
 	__flg_field(3, 0, dev_has_quorum)
+	__str_field(4, 0, backing_dev_path, 128)
 )
 
 GENL_struct(DRBD_NLA_CONNECTION_INFO, 17, connection_info,
@@ -307,6 +307,9 @@ GENL_struct(DRBD_NLA_PEER_DEVICE_STATISTICS, 22, peer_device_statistics,
 	__u64_field(21,0, peer_dev_rs_dt1_ms)
 	__u64_field(22,0, peer_dev_rs_db1_sectors)
 	__u32_field(23,0, peer_dev_rs_c_sync_rate)
+	/* events may not be sent for every change of the UUID flags, however
+	 * UUID_FLAG_STABLE can be trusted */
+	__u64_field(24,0, peer_dev_uuid_flags)
 )
 
 GENL_struct(DRBD_NLA_NOTIFICATION_HEADER, 23, drbd_notification_header,
@@ -348,6 +351,14 @@ GENL_struct(DRBD_NLA_CONNECT_PARMS, 29, connect_parms,
 
 GENL_struct(DRBD_NLA_PATH_INFO, 30, drbd_path_info,
 	__flg_field(1, 0, path_established)
+)
+
+GENL_struct(DRBD_NLA_RENAME_RESOURCE_PARMS, 31, rename_resource_parms,
+	__str_field(1, DRBD_GENLA_F_MANDATORY, new_resource_name, 128)
+)
+
+GENL_struct(DRBD_NLA_RENAME_RESOURCE_INFO, 32, rename_resource_info,
+	__str_field(1, DRBD_GENLA_F_MANDATORY, res_new_name, 128)
 )
 
 /*
@@ -571,6 +582,10 @@ GENL_op(DRBD_ADM_CHG_PEER_DEVICE_OPTS, 43,
 	GENL_doit(drbd_adm_peer_device_opts),
 	GENL_tla_expected(DRBD_NLA_CFG_CONTEXT, DRBD_F_REQUIRED)
 	GENL_tla_expected(DRBD_NLA_PEER_DEVICE_OPTS, DRBD_F_REQUIRED))
+
+GENL_op(DRBD_ADM_RENAME_RESOURCE,		49, GENL_doit(drbd_adm_rename_resource),
+	GENL_tla_expected(DRBD_NLA_CFG_CONTEXT, DRBD_F_REQUIRED)
+	GENL_tla_expected(DRBD_NLA_RENAME_RESOURCE_PARMS, DRBD_F_REQUIRED))
 
 GENL_notification(
 	DRBD_PATH_STATE, 48, events,

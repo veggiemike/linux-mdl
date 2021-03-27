@@ -75,6 +75,7 @@ static int dtt_connect(struct drbd_transport *transport);
 static int dtt_recv(struct drbd_transport *transport, enum drbd_stream stream, void **buf, size_t size, int flags);
 static int dtt_recv_pages(struct drbd_transport *transport, struct drbd_page_chain_head *chain, size_t size);
 static void dtt_stats(struct drbd_transport *transport, struct drbd_transport_stats *stats);
+static void dtt_net_conf_change(struct drbd_transport *transport, struct net_conf *new_net_conf);
 static void dtt_set_rcvtimeo(struct drbd_transport *transport, enum drbd_stream stream, long timeout);
 static long dtt_get_rcvtimeo(struct drbd_transport *transport, enum drbd_stream stream);
 static int dtt_send_page(struct drbd_transport *transport, enum drbd_stream, struct page *page,
@@ -103,6 +104,7 @@ static struct drbd_transport_ops dtt_ops = {
 	.recv = dtt_recv,
 	.recv_pages = dtt_recv_pages,
 	.stats = dtt_stats,
+	.net_conf_change = dtt_net_conf_change,
 	.set_rcvtimeo = dtt_set_rcvtimeo,
 	.get_rcvtimeo = dtt_get_rcvtimeo,
 	.send_page = dtt_send_page,
@@ -152,10 +154,31 @@ static struct drbd_path *__drbd_next_path_ref(struct drbd_path *drbd_path,
 	return drbd_path;
 }
 
+static void dtt_cork(struct socket *socket)
+{
+	int val = 1;
+	(void)kernel_setsockopt(socket, SOL_TCP, TCP_CORK, (char *)&val,
+				sizeof(val));
+}
+static void dtt_uncork(struct socket *socket)
+{
+	int val = 0;
+	(void)kernel_setsockopt(socket, SOL_TCP, TCP_CORK, (char *)&val,
+				sizeof(val));
+}
+
 static void dtt_nodelay(struct socket *socket)
 {
 	int val = 1;
-	(void) kernel_setsockopt(socket, SOL_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+	(void)kernel_setsockopt(socket, SOL_TCP, TCP_NODELAY, (char *)&val,
+				sizeof(val));
+}
+
+static void dtt_quickack(struct socket *socket)
+{
+	int val = 2;
+	(void)kernel_setsockopt(socket, SOL_TCP, TCP_QUICKACK, (char *)&val,
+				sizeof(val));
 }
 
 static int dtt_init(struct drbd_transport *transport)
@@ -209,8 +232,10 @@ static void dtt_free(struct drbd_transport *transport, enum drbd_tr_free_op free
 	for_each_path_ref(drbd_path, transport) {
 		bool was_established = drbd_path->established;
 		drbd_path->established = false;
-		if (was_established)
-			drbd_path_event(transport, drbd_path);
+		if (free_op == DESTROY_TRANSPORT)
+			drbd_path_event(transport, drbd_path, true);
+		else if (was_established)
+			drbd_path_event(transport, drbd_path, false);
 	}
 
 	if (free_op == DESTROY_TRANSPORT) {
@@ -378,14 +403,23 @@ static void dtt_stats(struct drbd_transport *transport, struct drbd_transport_st
 static void dtt_setbufsize(struct socket *socket, unsigned int snd,
 			   unsigned int rcv)
 {
+	struct sock *sk = socket->sk;
+
 	/* open coded SO_SNDBUF, SO_RCVBUF */
 	if (snd) {
-		socket->sk->sk_sndbuf = snd;
-		socket->sk->sk_userlocks |= SOCK_SNDBUF_LOCK;
+		sk->sk_sndbuf = snd;
+		sk->sk_userlocks |= SOCK_SNDBUF_LOCK;
+		/* Wake up sending tasks if we upped the value. */
+		sk->sk_write_space(sk);
+	} else {
+		sk->sk_userlocks &= ~SOCK_SNDBUF_LOCK;
 	}
+
 	if (rcv) {
-		socket->sk->sk_rcvbuf = rcv;
-		socket->sk->sk_userlocks |= SOCK_RCVBUF_LOCK;
+		sk->sk_rcvbuf = rcv;
+		sk->sk_userlocks |= SOCK_RCVBUF_LOCK;
+	} else {
+		sk->sk_userlocks &= ~SOCK_RCVBUF_LOCK;
 	}
 }
 
@@ -508,8 +542,22 @@ static int dtt_send_first_packet(struct drbd_tcp_transport *tcp_transport, struc
 }
 
 /**
+ * dtt_socket_free() - Free the socket
+ * @socket:	pointer to the pointer to the socket.
+ */
+static void dtt_socket_free(struct socket **socket)
+{
+	if (!*socket)
+		return;
+
+	kernel_sock_shutdown(*socket, SHUT_RDWR);
+	sock_release(*socket);
+	*socket = NULL;
+}
+
+/**
  * dtt_socket_ok_or_free() - Free the socket if its connection is not okay
- * @sock:	pointer to the pointer to the socket.
+ * @socket:	pointer to the pointer to the socket.
  */
 static bool dtt_socket_ok_or_free(struct socket **socket)
 {
@@ -519,9 +567,7 @@ static bool dtt_socket_ok_or_free(struct socket **socket)
 	if ((*socket)->sk->sk_state == TCP_ESTABLISHED)
 		return true;
 
-	kernel_sock_shutdown(*socket, SHUT_RDWR);
-	sock_release(*socket);
-	*socket = NULL;
+	dtt_socket_free(socket);
 	return false;
 }
 
@@ -648,12 +694,12 @@ retry:
 			switch (peer_addr.ss_family) {
 			case AF_INET6:
 				from_sin6 = (struct sockaddr_in6 *)&peer_addr;
-				tr_err(transport, "Closing unexpected connection from "
+				tr_notice(transport, "Closing unexpected connection from "
 				       "%pI6\n", &from_sin6->sin6_addr);
 				break;
 			default:
 				from_sin = (struct sockaddr_in *)&peer_addr;
-				tr_err(transport, "Closing unexpected connection from "
+				tr_notice(transport, "Closing unexpected connection from "
 					 "%pI4\n", &from_sin->sin_addr);
 				break;
 			}
@@ -877,7 +923,6 @@ static int dtt_connect(struct drbd_transport *transport)
 	struct socket *dsocket, *csocket;
 	struct net_conf *nc;
 	int timeout, err;
-	int one = 1;
 	bool ok;
 
 	dsocket = NULL;
@@ -931,15 +976,13 @@ static int dtt_connect(struct drbd_transport *transport)
 		if (s) {
 			bool use_for_data;
 
-			if (!first_path) {
-				first_path = connect_to_path;
-			} else if (first_path != connect_to_path) {
-				tr_warn(transport, "initial paths crossed A\n");
-				kernel_sock_shutdown(s, SHUT_RDWR);
-				sock_release(s);
-				connect_to_path = first_path;
-				continue;
+			if (first_path && first_path != connect_to_path) {
+				tr_info(transport, "initial paths crossed A - fail over\n");
+				dtt_socket_free(&dsocket);
+				dtt_socket_free(&csocket);
 			}
+
+			first_path = connect_to_path;
 
 			if (!dsocket && !csocket) {
 				use_for_data = dtt_path_cmp_addr(first_path);
@@ -976,15 +1019,14 @@ retry:
 		if (s) {
 			int fp = dtt_receive_first_packet(tcp_transport, s);
 
-			if (!first_path) {
-				first_path = connect_to_path;
-			} else if (first_path != connect_to_path) {
-				tr_warn(transport, "initial paths crossed P\n");
-				kernel_sock_shutdown(s, SHUT_RDWR);
-				sock_release(s);
-				connect_to_path = first_path;
-				goto randomize;
+			if (first_path && first_path != connect_to_path) {
+				tr_info(transport, "initial paths crossed P - fail over\n");
+				dtt_socket_free(&dsocket);
+				dtt_socket_free(&csocket);
 			}
+
+			first_path = connect_to_path;
+
 			dtt_socket_ok_or_free(&dsocket);
 			dtt_socket_ok_or_free(&csocket);
 			switch (fp) {
@@ -1027,7 +1069,7 @@ randomize:
 
 	TR_ASSERT(transport, first_path == connect_to_path);
 	connect_to_path->path.established = true;
-	drbd_path_event(transport, &connect_to_path->path);
+	drbd_path_event(transport, &connect_to_path->path, false);
 	dtt_put_listeners(transport);
 
 	dsocket->sk->sk_reuse = SK_CAN_REUSE; /* SO_REUSEADDR */
@@ -1046,7 +1088,7 @@ randomize:
 	 * which we set to 4x the configured ping_timeout. */
 
 	/* we don't want delays.
-	 * we use TCP_CORK where appropriate, though */
+	 * we use tcp_sock_set_cork where appropriate, though */
 	dtt_nodelay(dsocket);
 	dtt_nodelay(csocket);
 
@@ -1062,9 +1104,11 @@ randomize:
 	dsocket->sk->sk_sndtimeo = timeout;
 	csocket->sk->sk_sndtimeo = timeout;
 
-	err = kernel_setsockopt(dsocket, SOL_SOCKET, SO_KEEPALIVE, (char *)&one, sizeof(one));
-	if (err)
-		tr_warn(transport, "Failed to enable SO_KEEPALIVE %d\n", err);
+	{
+		int one = 1;
+		kernel_setsockopt(dsocket, SOL_SOCKET, SO_KEEPALIVE,
+				  (char *)&one, sizeof(one));
+	}
 
 	return 0;
 
@@ -1084,6 +1128,22 @@ out:
 	}
 
 	return err;
+}
+
+static void dtt_net_conf_change(struct drbd_transport *transport, struct net_conf *new_net_conf)
+{
+	struct drbd_tcp_transport *tcp_transport =
+		container_of(transport, struct drbd_tcp_transport, transport);
+	struct socket *data_socket = tcp_transport->stream[DATA_STREAM];
+	struct socket *control_socket = tcp_transport->stream[CONTROL_STREAM];
+
+	if (data_socket) {
+		dtt_setbufsize(data_socket, new_net_conf->sndbuf_size, new_net_conf->rcvbuf_size);
+	}
+
+	if (control_socket) {
+		dtt_setbufsize(control_socket, new_net_conf->sndbuf_size, new_net_conf->rcvbuf_size);
+	}
 }
 
 static void dtt_set_rcvtimeo(struct drbd_transport *transport, enum drbd_stream stream, long timeout)
@@ -1138,7 +1198,6 @@ static int dtt_send_page(struct drbd_transport *transport, enum drbd_stream stre
 	struct drbd_tcp_transport *tcp_transport =
 		container_of(transport, struct drbd_tcp_transport, transport);
 	struct socket *socket = tcp_transport->stream[stream];
-	mm_segment_t oldfs = get_fs();
 	int len = size;
 	int err = -EIO;
 
@@ -1147,7 +1206,6 @@ static int dtt_send_page(struct drbd_transport *transport, enum drbd_stream stre
 
 	msg_flags |= MSG_NOSIGNAL;
 	dtt_update_congested(tcp_transport);
-	set_fs(KERNEL_DS);
 	do {
 		int sent;
 
@@ -1173,7 +1231,6 @@ static int dtt_send_page(struct drbd_transport *transport, enum drbd_stream stre
 		 * and add that to the while() condition below.
 		 */
 	} while (len > 0 /* THINK && peer_device->repl_state[NOW] >= L_ESTABLISHED */);
-	set_fs(oldfs);
 	clear_bit(NET_CONGESTED, &tcp_transport->transport.flags);
 
 	if (len == 0)
@@ -1200,24 +1257,6 @@ static int dtt_send_zc_bio(struct drbd_transport *transport, struct bio *bio)
 			break;
 	}
 	return 0;
-}
-
-static void dtt_cork(struct socket *socket)
-{
-	int val = 1;
-	(void) kernel_setsockopt(socket, SOL_TCP, TCP_CORK, (char *)&val, sizeof(val));
-}
-
-static void dtt_uncork(struct socket *socket)
-{
-	int val = 0;
-	(void) kernel_setsockopt(socket, SOL_TCP, TCP_CORK, (char *)&val, sizeof(val));
-}
-
-static void dtt_quickack(struct socket *socket)
-{
-	int val = 2;
-	(void) kernel_setsockopt(socket, SOL_TCP, TCP_QUICKACK, (char *)&val, sizeof(val));
 }
 
 static bool dtt_hint(struct drbd_transport *transport, enum drbd_stream stream,

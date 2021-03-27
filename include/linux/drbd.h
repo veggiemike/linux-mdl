@@ -188,6 +188,7 @@ enum drbd_ret_code {
 	ERR_INVALID_PEER_NODE_ID = 171,
 	ERR_CREATE_TRANSPORT    = 172,
 	ERR_LOCAL_AND_PEER_ADDR = 173,
+	ERR_ALREADY_EXISTS 	= 174,
 
 	/* insert new ones above this line */
 	AFTER_LAST_ERR_CODE
@@ -347,7 +348,9 @@ enum drbd_state_rv {
 	SS_WEAKLY_CONNECTED = -24,
 	SS_NO_QUORUM = -25,
 	SS_ATTACH_NO_BITMAP = -26,
-	SS_AFTER_LAST_ERROR = -27,    /* Keep this at bottom */
+	SS_HANDSHAKE_DISCONNECT = -27,
+	SS_HANDSHAKE_RETRY = -28,
+	SS_AFTER_LAST_ERROR = -29,    /* Keep this at bottom */
 };
 
 #define SHARED_SECRET_MAX 64
@@ -411,6 +414,7 @@ enum drbd_notification_type {
 	NOTIFY_DESTROY,
 	NOTIFY_CALL,
 	NOTIFY_RESPONSE,
+	NOTIFY_RENAME,
 
 	NOTIFY_CONTINUES = 0x8000,
 	NOTIFY_FLAGS = NOTIFY_CONTINUES,

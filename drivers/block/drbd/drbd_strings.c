@@ -123,6 +123,8 @@ static const char * const __error_messages[] = {
 	[-SS_WEAKLY_CONNECTED] = "Primary nodes must be strongly connected among each other",
 	[-SS_NO_QUORUM] = "No quorum",
 	[-SS_ATTACH_NO_BITMAP] = "Intentional diskless peer may not attach a disk",
+	[-SS_HANDSHAKE_DISCONNECT] = "Disconnect chosen in handshake",
+	[-SS_HANDSHAKE_RETRY] = "Retry chosen in handshake",
 };
 
 struct state_names drbd_error_messages = {
@@ -190,6 +192,7 @@ static const char * const __packet_names[] = {
 	[P_TWOPC_YES]		= "P_TWOPC_YES",
 	[P_TWOPC_NO]		= "P_TWOPC_NO",
 	[P_TWOPC_RETRY]		= "P_TWOPC_RETRY",
+	[P_DISCONNECT]		= "P_DISCONNECT",
 	/* enum drbd_packet, but not commands - obsoleted flags:
 	 *	P_MAY_IGNORE
 	 *	P_MAX_OPT_CMD
