@@ -991,7 +991,7 @@ static int flush_send_buffer(struct drbd_connection *connection, enum drbd_strea
 	struct drbd_send_buffer *sbuf = &connection->send_buffer[drbd_stream];
 	struct drbd_transport *transport = &connection->transport;
 	struct drbd_transport_ops *tr_ops = transport->ops;
-	int msg_flags, err, offset, size;
+	int flags, err, offset, size;
 
 	size = sbuf->pos - sbuf->unsent + sbuf->allocated_size;
 	if (size == 0)
@@ -1003,9 +1003,10 @@ static int flush_send_buffer(struct drbd_connection *connection, enum drbd_strea
 		rcu_read_unlock();
 	}
 
-	msg_flags = sbuf->additional_size ? MSG_MORE : 0;
+	flags = (connection->cstate[NOW] < C_CONNECTING ? MSG_DONTWAIT : 0) |
+		(sbuf->additional_size ? MSG_MORE : 0);
 	offset = sbuf->unsent - (char *)page_address(sbuf->page);
-	err = tr_ops->send_page(transport, drbd_stream, sbuf->page, offset, size, msg_flags);
+	err = tr_ops->send_page(transport, drbd_stream, sbuf->page, offset, size, flags);
 	if (!err) {
 		sbuf->unsent =
 		sbuf->pos += sbuf->allocated_size;      /* send buffer submitted! */
@@ -1337,17 +1338,18 @@ int drbd_send_uuids(struct drbd_peer_device *peer_device, u64 uuid_flags, u64 no
 
 	sent_one_unallocated = peer_device->connection->agreed_pro_version < 116;
 	for (i = 0; i < DRBD_NODE_ID_MAX; i++) {
+		u64 val = __bitmap_uuid(device, i);
 		bool send_this =
 			peer_md[i].flags & MDF_HAVE_BITMAP || peer_md[i].flags & MDF_NODE_EXISTS;
 		if (!send_this && !sent_one_unallocated &&
-		    i != my_node_id && i != peer_device->node_id) {
+		    i != my_node_id && i != peer_device->node_id &&
+		    val) {
 			send_this = true;
 			sent_one_unallocated = true;
 			uuid_flags |= (u64)i << UUID_FLAG_UNALLOC_SHIFT;
 			uuid_flags |= UUID_FLAG_HAS_UNALLOC;
 		}
 		if (send_this) {
-			u64 val = __bitmap_uuid(device, i);
 			bitmap_uuids_mask |= NODE_MASK(i);
 			p->other_uuids[pos++] = cpu_to_be64(val);
 			if (i == peer_device->node_id)
@@ -2385,7 +2387,7 @@ static void __prune_or_free_openers(struct drbd_device *device, pid_t pid)
 {
 	struct opener *pos, *tmp;
 
-	list_for_each_entry_safe(pos, tmp, &device->openers.list, list) {
+	list_for_each_entry_safe(pos, tmp, &device->openers, list) {
 		// if pid == 0, i.e., counts were 0, delete all entries, else the matching one
 		if (pid == 0 || pid == pos->pid) {
 			dynamic_drbd_dbg(device, "%sopeners del: %s(%d)\n", pid == 0 ? "" : "all ",
@@ -2396,37 +2398,47 @@ static void __prune_or_free_openers(struct drbd_device *device, pid_t pid)
 			/* in case we remove a real process, stop here, there might be multiple openers with the same pid */
 			/* this assumes that the oldest opener with the same pid releases first. "as good as it gets" */
 			if (pid != 0)
-				return;
+				break;
 		}
 	}
 }
 
-static void free_openers(struct drbd_device *device) {
+static void free_openers(struct drbd_device *device)
+{
 	__prune_or_free_openers(device, 0);
 }
 
-/* caller needs to hold the the open_release_lock */
+static void prune_or_free_openers(struct drbd_device *device, pid_t pid)
+{
+	spin_lock(&device->openers_lock);
+	__prune_or_free_openers(device, pid);
+	spin_unlock(&device->openers_lock);
+}
+
 static void add_opener(struct drbd_device *device)
 {
-	struct opener *opener;
+	struct opener *opener, *tmp;
 	int len = 0;
 
-	list_for_each_entry(opener, &device->openers.list, list)
-		if (++len > 100) { /* 100 ought to be enough for everybody */
-			dynamic_drbd_dbg(device, "openers: list full, do not add new opener\n");
-			return;
-		}
-
 	opener = kmalloc(sizeof(*opener), GFP_NOIO);
-	if (!opener) {
+	if (!opener)
 		return;
-	}
-
 	get_task_comm(opener->comm, current);
 	opener->pid = task_pid_nr(current);
 	opener->opened = ktime_get_real();
-	list_add(&opener->list, &device->openers.list);
+
+	spin_lock(&device->openers_lock);
+	list_for_each_entry(tmp, &device->openers, list)
+		if (++len > 100) { /* 100 ought to be enough for everybody */
+			dynamic_drbd_dbg(device, "openers: list full, do not add new opener\n");
+			kfree(opener);
+			goto out;
+		}
+
+	list_add(&opener->list, &device->openers);
 	dynamic_drbd_dbg(device, "openers add: %s(%d)\n", opener->comm, opener->pid);
+out:
+	spin_unlock(&device->openers_lock);
 }
 
 static int drbd_open(struct block_device *bdev, fmode_t mode)
@@ -2564,7 +2576,7 @@ static void drbd_release(struct gendisk *gd, fmode_t mode)
 	}
 
 	/* if the open counts are 0, we free the whole list, otherwise we remove the specific pid */
-	__prune_or_free_openers(device,
+	prune_or_free_openers(device,
 			(open_ro_cnt == 0 && open_rw_cnt == 0) ? 0 : task_pid_nr(current));
 
 	mutex_unlock(&resource->open_release);
@@ -3482,7 +3494,8 @@ enum drbd_ret_code drbd_create_device(struct drbd_config_context *adm_ctx, unsig
 	INIT_LIST_HEAD(&device->pending_master_completion[1]);
 	INIT_LIST_HEAD(&device->pending_completion[0]);
 	INIT_LIST_HEAD(&device->pending_completion[1]);
-	INIT_LIST_HEAD(&device->openers.list);
+	INIT_LIST_HEAD(&device->openers);
+	spin_lock_init(&device->openers_lock);
 
 	atomic_set(&device->pending_bitmap_work.n, 0);
 	spin_lock_init(&device->pending_bitmap_work.q_lock);
@@ -5164,8 +5177,8 @@ u64 directly_connected_nodes(struct drbd_resource *resource, enum which_state wh
 
 static sector_t bm_sect_to_max_capacity(unsigned int bm_max_peers, sector_t bm_sect)
 {
-	u64 bm_pages = bm_sect >> (PAGE_SHIFT - SECTOR_SHIFT);
-	u64 bm_bytes = bm_pages << PAGE_SHIFT;
+	/* we do our meta data IO in 4k units */
+	u64 bm_bytes = ALIGN_DOWN(bm_sect << SECTOR_SHIFT, 4096);
 	u64 bm_bytes_per_peer = div_u64(bm_bytes, bm_max_peers);
 	u64 bm_bits_per_peer = bm_bytes_per_peer * BITS_PER_BYTE;
 	return BM_BIT_TO_SECT(bm_bits_per_peer);

@@ -65,6 +65,54 @@ enum resync_reason {
 	DISKLESS_PRIMARY,
 };
 
+enum sync_rule {
+	RULE_SYNC_SOURCE_MISSED_FINISH,
+	RULE_SYNC_SOURCE_PEER_MISSED_FINISH,
+	RULE_SYNC_TARGET_MISSED_FINISH,
+	RULE_SYNC_TARGET_PEER_MISSED_FINISH,
+	RULE_SYNC_TARGET_MISSED_START,
+	RULE_SYNC_SOURCE_MISSED_START,
+	RULE_INITIAL_HANDSHAKE_CHANGED,
+	RULE_JUST_CREATED_PEER,
+	RULE_JUST_CREATED_SELF,
+	RULE_JUST_CREATED_BOTH,
+	RULE_LOST_QUORUM,
+	RULE_RECONNECTED,
+	RULE_BOTH_OFF,
+	RULE_BITMAP_PEER,
+	RULE_BITMAP_PEER_OTHER,
+	RULE_BITMAP_SELF,
+	RULE_BITMAP_SELF_OTHER,
+	RULE_BITMAP_BOTH,
+	RULE_HISTORY_PEER,
+	RULE_HISTORY_SELF,
+	RULE_HISTORY_BOTH,
+};
+
+static const char * const sync_rule_names[] = {
+	[RULE_SYNC_SOURCE_MISSED_FINISH] = "sync-source-missed-finish",
+	[RULE_SYNC_SOURCE_PEER_MISSED_FINISH] = "sync-source-peer-missed-finish",
+	[RULE_SYNC_TARGET_MISSED_FINISH] = "sync-target-missed-finish",
+	[RULE_SYNC_TARGET_PEER_MISSED_FINISH] = "sync-target-peer-missed-finish",
+	[RULE_SYNC_TARGET_MISSED_START] = "sync-target-missed-start",
+	[RULE_SYNC_SOURCE_MISSED_START] = "sync-source-missed-start",
+	[RULE_INITIAL_HANDSHAKE_CHANGED] = "initial-handshake-changed",
+	[RULE_JUST_CREATED_PEER] = "just-created-peer",
+	[RULE_JUST_CREATED_SELF] = "just-created-self",
+	[RULE_JUST_CREATED_BOTH] = "just-created-both",
+	[RULE_LOST_QUORUM] = "lost-quorum",
+	[RULE_RECONNECTED] = "reconnected",
+	[RULE_BOTH_OFF] = "both-off",
+	[RULE_BITMAP_PEER] = "bitmap-peer",
+	[RULE_BITMAP_PEER_OTHER] = "bitmap-peer-other",
+	[RULE_BITMAP_SELF] = "bitmap-self",
+	[RULE_BITMAP_SELF_OTHER] = "bitmap-self-other",
+	[RULE_BITMAP_BOTH] = "bitmap-both",
+	[RULE_HISTORY_PEER] = "history-peer",
+	[RULE_HISTORY_SELF] = "history-self",
+	[RULE_HISTORY_BOTH] = "history-both",
+};
+
 enum sync_strategy {
 	UNDETERMINED,
 	NO_SYNC,
@@ -179,10 +227,21 @@ static void drbd_unplug_all_devices(struct drbd_connection *connection);
 static int decode_header(struct drbd_connection *, void *, struct packet_info *);
 static void check_resync_source(struct drbd_device *device, u64 weak_nodes);
 
+static const char *drbd_sync_rule_str(enum sync_rule rule)
+{
+	if (rule < 0 || rule > ARRAY_SIZE(sync_rule_names)) {
+		WARN_ON(true);
+		return "?";
+	}
+	return sync_rule_names[rule];
+}
+
 static const struct sync_descriptor strategy_descriptor(enum sync_strategy strategy)
 {
-	if (strategy < 0 || strategy > sizeof(sync_descriptors) / sizeof(struct sync_descriptor))
-		BUG();
+	if (strategy < 0 || strategy > ARRAY_SIZE(sync_descriptors)) {
+		WARN_ON(true);
+		return sync_descriptors[UNDETERMINED];
+	}
 	return sync_descriptors[strategy];
 }
 
@@ -656,6 +715,16 @@ static int drbd_send_disconnect(struct drbd_connection *connection)
 	return send_command(connection, -1, P_DISCONNECT, DATA_STREAM);
 }
 
+static void initialize_send_buffer(struct drbd_connection *connection, enum drbd_stream drbd_stream)
+{
+	struct drbd_send_buffer *sbuf = &connection->send_buffer[drbd_stream];
+
+	sbuf->unsent =
+	sbuf->pos = page_address(sbuf->page);
+	sbuf->allocated_size = 0;
+	sbuf->additional_size = 0;
+}
+
 /* Gets called if a connection is established, or if a new minor gets created
    in a connection */
 int drbd_connected(struct drbd_peer_device *peer_device)
@@ -848,6 +917,7 @@ static bool conn_connect(struct drbd_connection *connection)
 	struct drbd_resource *resource = connection->resource;
 	int ping_timeo, ping_int, h, err, vnr, timeout;
 	struct drbd_peer_device *peer_device;
+	enum drbd_stream stream;
 	struct net_conf *nc;
 	bool discard_my_data;
 	bool have_mutex;
@@ -910,8 +980,10 @@ start:
 
 	/* Make sure we are "uncorked", otherwise we risk timeouts,
 	 * in case this is a reconnect and we had been corked before. */
-	drbd_uncork(connection, CONTROL_STREAM);
-	drbd_uncork(connection, DATA_STREAM);
+	for (stream = DATA_STREAM; stream <= CONTROL_STREAM; stream++) {
+		initialize_send_buffer(connection, stream);
+		drbd_uncork(connection, stream);
+	}
 
 	/* Make sure the handshake happens without interference from other threads,
 	 * or the challenge response authentication could be garbled. */
@@ -1844,7 +1916,7 @@ int w_e_reissue(struct drbd_work *w, int cancel) __releases(local)
 		drbd_queue_work(&connection->sender_work,
 				&peer_req->w);
 		/* retry later */
-		;/* fallthrough */
+		fallthrough;
 	case 0:
 		/* keep worker happy and connection up */
 		return 0;
@@ -3336,7 +3408,7 @@ static int receive_DataRequest(struct drbd_connection *connection, struct packet
 			/* case P_DATA_REQUEST: see above, not based on protocol version */
 			case P_OV_REQUEST:
 				verify_skipped_block(peer_device, sector, size);
-				;/* fallthrough */
+				fallthrough;
 			case P_RS_DATA_REQUEST:
 			case P_RS_THIN_REQ:
 			case P_CSUM_RS_REQUEST:
@@ -3365,7 +3437,7 @@ static int receive_DataRequest(struct drbd_connection *connection, struct packet
 		   then we would do something smarter here than reading
 		   the block... */
 		peer_req->flags |= EE_RS_THIN_REQ;
-		;/* fallthrough */
+		fallthrough;
 	case P_RS_DATA_REQUEST:
 		peer_req->w.cb = w_e_end_rsdata_req;
 		break;
@@ -3537,7 +3609,7 @@ static enum sync_strategy drbd_asb_recover_0p(struct drbd_peer_device *peer_devi
 			rv = SYNC_SOURCE_USE_BITMAP;
 			break;
 		}
-		;/* fallthrough */	/* to one of the other strategies */
+		fallthrough;	/* to one of the other strategies */
 	case ASB_DISCARD_OLDER_PRI:
 		if (self == 0 && peer == 1) {
 			rv = SYNC_SOURCE_USE_BITMAP;
@@ -3549,7 +3621,7 @@ static enum sync_strategy drbd_asb_recover_0p(struct drbd_peer_device *peer_devi
 		}
 		drbd_warn(peer_device, "Discard younger/older primary did not find a decision\n"
 			  "Using discard-least-changes instead\n");
-		;/* fallthrough */
+		fallthrough;
 	case ASB_DISCARD_ZERO_CHG:
 		if (ch_peer == 0 && ch_self == 0) {
 			rv = test_bit(RESOLVE_CONFLICTS, &peer_device->connection->transport.flags)
@@ -3561,7 +3633,7 @@ static enum sync_strategy drbd_asb_recover_0p(struct drbd_peer_device *peer_devi
 		}
 		if (after_sb_0p == ASB_DISCARD_ZERO_CHG)
 			break;
-		;/* fallthrough */
+		fallthrough;
 	case ASB_DISCARD_LEAST_CHG:
 		if	(ch_self < ch_peer)
 			rv = SYNC_TARGET_USE_BITMAP;
@@ -3721,8 +3793,45 @@ static void drbd_uuid_dump_peer(struct drbd_peer_device *peer_device, u64 bits, 
 	     (unsigned long long)flags);
 }
 
+/* find the peer's bitmap slot for the given UUID, if they have one */
+static int drbd_find_peer_bitmap_by_uuid(struct drbd_peer_device *peer_device, u64 uuid)
+{
+	u64 peer;
+	int i;
+
+	for (i = 0; i < DRBD_PEERS_MAX; i++) {
+		peer = peer_device->bitmap_uuids[i] & ~UUID_PRIMARY;
+		if (uuid == peer)
+			return i;
+	}
+
+	return -1;
+}
+
+/* find our bitmap slot for the given UUID, if we have one */
+static int drbd_find_bitmap_by_uuid(struct drbd_peer_device *peer_device, u64 uuid)
+{
+	struct drbd_connection *connection = peer_device->connection;
+	struct drbd_device *device = peer_device->device;
+	u64 self;
+	int i;
+
+	for (i = 0; i < DRBD_NODE_ID_MAX; i++) {
+		if (i == device->ldev->md.node_id)
+			continue;
+		if (connection->agreed_pro_version < 116 &&
+		    device->ldev->md.peers[i].bitmap_index == -1)
+			continue;
+		self = device->ldev->md.peers[i].bitmap_uuid & ~UUID_PRIMARY;
+		if (self == uuid)
+			return i;
+	}
+
+	return -1;
+}
+
 static enum sync_strategy drbd_uuid_compare(struct drbd_peer_device *peer_device,
-			     int *rule_nr, int *peer_node_id) __must_hold(local)
+			     enum sync_rule *rule, int *peer_node_id) __must_hold(local)
 {
 	struct drbd_connection *connection = peer_device->connection;
 	struct drbd_device *device = peer_device->device;
@@ -3751,7 +3860,7 @@ static enum sync_strategy drbd_uuid_compare(struct drbd_peer_device *peer_device
 	bitmap_matches_initial = drbd_bitmap_uuid(peer_device) == peer_device->comm_bitmap_uuid;
 	flags_matches_initial = local_uuid_flags == peer_device->comm_uuid_flags;
 	if (initial_handshake && (!uuid_matches_initial || !flags_matches_initial || !bitmap_matches_initial)) {
-		*rule_nr = 9;
+		*rule = RULE_INITIAL_HANDSHAKE_CHANGED;
 		if (!uuid_matches_initial)
 			drbd_warn(peer_device, "My current UUID changed during "
 				  "handshake. Retry connecting.\n");
@@ -3775,29 +3884,29 @@ static enum sync_strategy drbd_uuid_compare(struct drbd_peer_device *peer_device
 	if (peer == 0)
 		peer = UUID_JUST_CREATED;
 
-	*rule_nr = 10;
+	*rule = RULE_JUST_CREATED_BOTH;
 	if (self == UUID_JUST_CREATED && peer == UUID_JUST_CREATED)
 		return NO_SYNC;
 
-	*rule_nr = 20;
+	*rule = RULE_JUST_CREATED_SELF;
 	if (self == UUID_JUST_CREATED)
 		return SYNC_TARGET_SET_BITMAP;
 
-	*rule_nr = 30;
+	*rule = RULE_JUST_CREATED_PEER;
 	if (peer == UUID_JUST_CREATED)
 		return SYNC_SOURCE_SET_BITMAP;
 
 	if (self == peer) {
 		if (test_bit(RS_SOURCE_MISSED_END, &peer_device->flags)) {
-			*rule_nr = 34;
+			*rule = RULE_SYNC_SOURCE_MISSED_FINISH;
 			return SYNC_SOURCE_USE_BITMAP;
 		}
 		if (test_bit(RS_PEER_MISSED_END, &peer_device->flags)) {
-			*rule_nr = 35;
+			*rule = RULE_SYNC_TARGET_PEER_MISSED_FINISH;
 			return SYNC_TARGET_USE_BITMAP;
 		}
 
-		*rule_nr = 39;
+		*rule = RULE_LOST_QUORUM;
 		if (peer_device->uuid_flags & UUID_FLAG_PRIMARY_LOST_QUORUM &&
 		    !test_bit(PRIMARY_LOST_QUORUM, &device->flags))
 			return SYNC_TARGET_IF_BOTH_FAILED;
@@ -3812,7 +3921,7 @@ static enum sync_strategy drbd_uuid_compare(struct drbd_peer_device *peer_device
 				SYNC_SOURCE_IF_BOTH_FAILED :
 				SYNC_TARGET_IF_BOTH_FAILED;
 
-		*rule_nr = 38;
+		*rule = RULE_RECONNECTED;
 		/* This is a safety net for the following two clauses */
 		if (peer_device->uuid_flags & UUID_FLAG_RECONNECT &&
 		    local_uuid_flags & UUID_FLAG_RECONNECT)
@@ -3835,7 +3944,7 @@ static enum sync_strategy drbd_uuid_compare(struct drbd_peer_device *peer_device
 			return NO_SYNC;
 
 		/* Common power [off|failure]? */
-		*rule_nr = 40;
+		*rule = RULE_BOTH_OFF;
 		if (local_uuid_flags & UUID_FLAG_CRASHED_PRIMARY) {
 			if ((peer_device->uuid_flags & UUID_FLAG_CRASHED_PRIMARY) &&
 			    test_bit(RESOLVE_CONFLICTS, &connection->transport.flags))
@@ -3847,40 +3956,29 @@ static enum sync_strategy drbd_uuid_compare(struct drbd_peer_device *peer_device
 			return NO_SYNC;
 	}
 
-	*rule_nr = 50;
+	*rule = RULE_BITMAP_PEER;
 	peer = peer_device->bitmap_uuids[node_id] & ~UUID_PRIMARY;
 	if (self == peer)
 		return SYNC_TARGET_USE_BITMAP;
 
-	*rule_nr = 52;
-	for (i = 0; i < DRBD_PEERS_MAX; i++) {
-		peer = peer_device->bitmap_uuids[i] & ~UUID_PRIMARY;
-		if (self == peer) {
-			*peer_node_id = i;
-			return SYNC_TARGET_CLEAR_BITMAP;
-		}
+	*rule = RULE_BITMAP_PEER_OTHER;
+	i = drbd_find_peer_bitmap_by_uuid(peer_device, self);
+	if (i != -1) {
+		*peer_node_id = i;
+		return SYNC_TARGET_CLEAR_BITMAP;
 	}
 
-	*rule_nr = 70;
+	*rule = RULE_BITMAP_SELF;
 	self = drbd_bitmap_uuid(peer_device) & ~UUID_PRIMARY;
 	peer = peer_device->current_uuid & ~UUID_PRIMARY;
 	if (self == peer)
 		return SYNC_SOURCE_USE_BITMAP;
 
-	*rule_nr = 72;
-	for (i = 0; i < DRBD_NODE_ID_MAX; i++) {
-		if (i == peer_device->node_id)
-			continue;
-		if (i == device->ldev->md.node_id)
-			continue;
-		if (connection->agreed_pro_version < 116 &&
-		    device->ldev->md.peers[i].bitmap_index == -1)
-			continue;
-		self = device->ldev->md.peers[i].bitmap_uuid & ~UUID_PRIMARY;
-		if (self == peer) {
-			*peer_node_id = i;
-			return SYNC_SOURCE_COPY_BITMAP;
-		}
+	*rule = RULE_BITMAP_SELF_OTHER;
+	i = drbd_find_bitmap_by_uuid(peer_device, peer);
+	if (i != -1) {
+		*peer_node_id = i;
+		return SYNC_SOURCE_COPY_BITMAP;
 	}
 
 	my_current_in_peers_history = false;
@@ -3904,21 +4002,21 @@ static enum sync_strategy drbd_uuid_compare(struct drbd_peer_device *peer_device
 	}
 
 	if (my_current_in_peers_history && !peers_current_in_my_history) {
-		*rule_nr = 60;
+		*rule = RULE_HISTORY_PEER;
 		return SYNC_TARGET_SET_BITMAP;
 	}
 	if (!my_current_in_peers_history && peers_current_in_my_history) {
-		*rule_nr = 80;
+		*rule = RULE_HISTORY_SELF;
 		return SYNC_SOURCE_SET_BITMAP;
 	}
 
-	*rule_nr = 90;
+	*rule = RULE_BITMAP_BOTH;
 	self = drbd_bitmap_uuid(peer_device) & ~UUID_PRIMARY;
 	peer = peer_device->bitmap_uuids[node_id] & ~UUID_PRIMARY;
 	if (self == peer && self != ((u64)0))
 		return SPLIT_BRAIN_AUTO_RECOVER;
 
-	*rule_nr = 100;
+	*rule = RULE_HISTORY_BOTH;
 	for (i = 0; i < HISTORY_UUIDS; i++) {
 		self = drbd_history_uuid(device, i) & ~UUID_PRIMARY;
 		/* Don't conclude to have "data divergence" from a "common ancestor"
@@ -3948,7 +4046,7 @@ static void log_handshake(struct drbd_peer_device *peer_device)
 }
 
 static enum sync_strategy drbd_handshake(struct drbd_peer_device *peer_device,
-			  int *rule_nr,
+			  enum sync_rule *rule,
 			  int *peer_node_id,
 			  bool always_verbose) __must_hold(local)
 {
@@ -3959,13 +4057,15 @@ static enum sync_strategy drbd_handshake(struct drbd_peer_device *peer_device,
 	if (always_verbose)
 		log_handshake(peer_device);
 
-	strategy = drbd_uuid_compare(peer_device, rule_nr, peer_node_id);
+	strategy = drbd_uuid_compare(peer_device, rule, peer_node_id);
 	if (strategy != NO_SYNC && !always_verbose)
 		log_handshake(peer_device);
 	spin_unlock_irq(&device->ldev->md.uuid_lock);
 
 	if (strategy != NO_SYNC || always_verbose)
-		drbd_info(peer_device, "uuid_compare()=%s by rule %d\n", strategy_descriptor(strategy).name, *rule_nr);
+		drbd_info(peer_device, "uuid_compare()=%s by rule=%s\n",
+				strategy_descriptor(strategy).name,
+				drbd_sync_rule_str(*rule));
 
 	return strategy;
 }
@@ -4106,9 +4206,62 @@ static enum drbd_repl_state strategy_to_repl_state(struct drbd_peer_device *peer
 	return rv;
 }
 
+static enum sync_strategy drbd_disk_states_source_strategy(
+		struct drbd_peer_device *peer_device,
+		int *peer_node_id)
+{
+	struct drbd_device *device = peer_device->device;
+	const int node_id = device->resource->res_opts.node_id;
+	int i;
+
+	if (!(peer_device->uuid_flags & UUID_FLAG_SYNC_TARGET))
+		return SYNC_SOURCE_USE_BITMAP;
+
+	/* When the peer is already a sync target, we actually see its
+	 * current UUID in the bitmap UUID slot towards us. We may need
+	 * to pick a different bitmap as a result. */
+	i = drbd_find_bitmap_by_uuid(peer_device, peer_device->bitmap_uuids[node_id]);
+
+	if (i == -1)
+		return SYNC_SOURCE_SET_BITMAP;
+
+	if (i == peer_device->node_id)
+		return SYNC_SOURCE_USE_BITMAP;
+
+	*peer_node_id = i;
+	return SYNC_SOURCE_COPY_BITMAP;
+}
+
+static enum sync_strategy drbd_disk_states_target_strategy(
+		struct drbd_peer_device *peer_device,
+		int *peer_node_id)
+{
+	struct drbd_device *device = peer_device->device;
+	const int node_id = device->resource->res_opts.node_id;
+	int i;
+
+	if (!(peer_device->comm_uuid_flags & UUID_FLAG_SYNC_TARGET))
+		return SYNC_TARGET_USE_BITMAP;
+
+	/* When we are already a sync target, we need to choose our
+	 * strategy to mirror the peer's choice (see
+	 * drbd_disk_states_source_strategy). */
+	i = drbd_find_peer_bitmap_by_uuid(peer_device, drbd_bitmap_uuid(peer_device));
+
+	if (i == -1)
+		return SYNC_TARGET_SET_BITMAP;
+
+	if (i == node_id)
+		return SYNC_TARGET_USE_BITMAP;
+
+	*peer_node_id = i;
+	return SYNC_TARGET_CLEAR_BITMAP;
+}
+
 static void disk_states_to_strategy(struct drbd_peer_device *peer_device,
 				    enum drbd_disk_state peer_disk_state,
-				    enum sync_strategy *strategy, int rule_nr)
+				    enum sync_strategy *strategy, enum sync_rule rule,
+				    int *peer_node_id)
 {
 	enum drbd_disk_state disk_state = peer_device->comm_state.disk;
 	struct drbd_device *device = peer_device->device;
@@ -4132,28 +4285,30 @@ static void disk_states_to_strategy(struct drbd_peer_device *peer_device,
 
 		decide_based_on_dstates =
 			dstates_want_resync &&
-			(((rule_nr == 38 || rule_nr == 39 || rule_nr == 40) &&
+			(((rule == RULE_RECONNECTED || rule == RULE_LOST_QUORUM || rule == RULE_BOTH_OFF) &&
 			  resync_direction_arbitrary) ||
 			 (*strategy == NO_SYNC && either_inconsistent));
 
 		prefer_local = disk_state > peer_disk_state;
-		/* rule_nr 40 means that the current UUIDs are equal. The decision
+		/* RULE_BOTH_OFF means that the current UUIDs are equal. The decision
 		   was found by looking at the crashed_primary bits.
 		   The current disk states might give a better basis for decision-making! */
 
-		/* rule_nr 39 means that the current UUIDs are equal. The resync direction
+		/* RULE_LOST_QUORUM means that the current UUIDs are equal. The resync direction
 		   was found by looking if a node lost quorum while being primary */
 	} else {
 		decide_based_on_dstates =
-			(rule_nr == 40 || *strategy == NO_SYNC) && either_inconsistent;
+			(rule == RULE_BOTH_OFF || *strategy == NO_SYNC) && either_inconsistent;
 
 		prefer_local = disk_state > D_INCONSISTENT;
 	}
 
 	if (decide_based_on_dstates) {
-		*strategy = prefer_local ? SYNC_SOURCE_USE_BITMAP : SYNC_TARGET_USE_BITMAP;
-		drbd_info(peer_device, "Becoming sync %s due to disk states. (%s/%s)\n",
-			  strategy_descriptor(*strategy).is_sync_source ? "source" : "target",
+		*strategy = prefer_local ?
+			drbd_disk_states_source_strategy(peer_device, peer_node_id) :
+			drbd_disk_states_target_strategy(peer_device, peer_node_id);
+		drbd_info(peer_device, "strategy = %s due to disk states. (%s/%s)\n",
+			  strategy_descriptor(*strategy).name,
 			  drbd_disk_str(disk_state), drbd_disk_str(peer_disk_state));
 	}
 }
@@ -4162,15 +4317,16 @@ static enum drbd_repl_state drbd_attach_handshake(struct drbd_peer_device *peer_
 						  enum drbd_disk_state peer_disk_state) __must_hold(local)
 {
 	enum sync_strategy strategy;
-	int rule_nr, peer_node_id;
+	enum sync_rule rule;
+	int peer_node_id;
 
-	strategy = drbd_handshake(peer_device, &rule_nr, &peer_node_id, true);
+	strategy = drbd_handshake(peer_device, &rule, &peer_node_id, true);
 
 	if (!is_strategy_determined(strategy))
 		return -1;
 
+	disk_states_to_strategy(peer_device, peer_disk_state, &strategy, rule, &peer_node_id);
 	bitmap_mod_after_handshake(peer_device, strategy, peer_node_id);
-	disk_states_to_strategy(peer_device, peer_disk_state, &strategy, rule_nr);
 
 	return strategy_to_repl_state(peer_device, peer_device->connection->peer_role[NOW], strategy);
 }
@@ -4186,12 +4342,13 @@ static enum drbd_repl_state drbd_sync_handshake(struct drbd_peer_device *peer_de
 	enum drbd_disk_state disk_state;
 	struct net_conf *nc;
 	enum sync_strategy strategy;
-	int rule_nr, rr_conflict, always_asbp, peer_node_id = 0, r;
+	enum sync_rule rule;
+	int rr_conflict, always_asbp, peer_node_id = 0, r;
 	enum drbd_role peer_role = peer_state.role;
 	enum drbd_disk_state peer_disk_state = peer_state.disk;
 	int required_protocol;
 
-	strategy = drbd_handshake(peer_device, &rule_nr, &peer_node_id, true);
+	strategy = drbd_handshake(peer_device, &rule, &peer_node_id, true);
 
 	disk_state = device->disk_state[NOW];
 	if (disk_state == D_NEGOTIATING)
@@ -4210,7 +4367,7 @@ static enum drbd_repl_state drbd_sync_handshake(struct drbd_peer_device *peer_de
 		return -2;
 	}
 
-	disk_states_to_strategy(peer_device, peer_disk_state, &strategy, rule_nr);
+	disk_states_to_strategy(peer_device, peer_disk_state, &strategy, rule, &peer_node_id);
 
 	if (strategy == SPLIT_BRAIN_AUTO_RECOVER && (!drbd_device_stable(device, NULL) || !(peer_device->uuid_flags & UUID_FLAG_STABLE))) {
 		drbd_warn(device, "Ignore Split-Brain, for now, at least one side unstable\n");
@@ -4298,7 +4455,7 @@ static enum drbd_repl_state drbd_sync_handshake(struct drbd_peer_device *peer_de
 		switch (rr_conflict) {
 		case ASB_CALL_HELPER:
 			drbd_maybe_khelper(device, connection, "pri-lost");
-			;/* fallthrough */
+			fallthrough;
 		case ASB_DISCONNECT:
 		case ASB_RETRY_CONNECT:
 			drbd_err(device, "I shall become SyncTarget, but I am primary!\n");
@@ -5060,10 +5217,11 @@ static void drbd_resync(struct drbd_peer_device *peer_device,
 	enum drbd_repl_state new_repl_state;
 	enum drbd_disk_state peer_disk_state;
 	enum sync_strategy strategy;
-	int rule_nr, peer_node_id;
+	enum sync_rule rule;
+	int peer_node_id;
 	enum drbd_state_rv rv;
 
-	strategy = drbd_handshake(peer_device, &rule_nr, &peer_node_id, reason == DISKLESS_PRIMARY);
+	strategy = drbd_handshake(peer_device, &rule, &peer_node_id, reason == DISKLESS_PRIMARY);
 	if (strategy == SPLIT_BRAIN_AUTO_RECOVER && reason == AFTER_UNSTABLE)
 		strategy = resolve_splitbrain_from_disk_states(peer_device);
 
@@ -5168,8 +5326,9 @@ static int __receive_uuids(struct drbd_peer_device *peer_device, u64 node_mask)
 
 		if (device->disk_state[NOW] > D_OUTDATED) {
 			enum sync_strategy strategy;
+			enum sync_rule unused_rule;
 			int unused_int;
-			strategy = drbd_uuid_compare(peer_device, &unused_int, &unused_int);
+			strategy = drbd_uuid_compare(peer_device, &unused_rule, &unused_int);
 
 			if (strategy == SYNC_TARGET_SET_BITMAP || strategy == SYNC_TARGET_USE_BITMAP) {
 				struct drbd_resource *resource = device->resource;
@@ -5518,17 +5677,17 @@ static void log_openers(struct drbd_resource *resource)
 	struct drbd_device *device;
 	int vnr;
 
-	mutex_lock(&resource->open_release);
 	rcu_read_lock();
 	idr_for_each_entry(&resource->devices, device, vnr) {
 		struct opener *opener;
 
-		opener = list_first_entry_or_null(&device->openers.list, struct opener, list);
+		spin_lock(&device->openers_lock);
+		opener = list_first_entry_or_null(&device->openers, struct opener, list);
 		if (opener)
 			drbd_warn(device, "Held open by %s(%d)\n", opener->comm, opener->pid);
+		spin_unlock(&device->openers_lock);
 	}
 	rcu_read_unlock();
-	mutex_unlock(&resource->open_release);
 }
 
 /**
@@ -6550,9 +6709,10 @@ void drbd_try_to_get_resynced(struct drbd_device *device)
 	rcu_read_lock();
 	for_each_peer_device_rcu(peer_device, device) {
 		enum sync_strategy strategy;
-		int rule_nr, peer_node_id;
+		enum sync_rule rule;
+		int peer_node_id;
 		if (peer_device->disk_state[NOW] == D_UP_TO_DATE) {
-			strategy = drbd_uuid_compare(peer_device, &rule_nr, &peer_node_id);
+			strategy = drbd_uuid_compare(peer_device, &rule, &peer_node_id);
 			drbd_info(peer_device, "strategy = %s\n", strategy_descriptor(strategy).name);
 			if (strategy_descriptor(strategy).resync_peer_preference > best_resync_peer_preference) {
 				best_resync_peer_preference = strategy_descriptor(strategy).resync_peer_preference;
@@ -7370,13 +7530,14 @@ static int receive_peer_dagtag(struct drbd_connection *connection, struct packet
 
 	idr_for_each_entry(&connection->peer_devices, peer_device, vnr) {
 		enum sync_strategy ps;
-		int rule_nr, unused;
+		enum sync_rule rule;
+		int unused;
 
 		if (peer_device->repl_state[NOW] > L_ESTABLISHED)
 			goto out;
 		if (!get_ldev(peer_device->device))
 			continue;
-		ps = drbd_uuid_compare(peer_device, &rule_nr, &unused);
+		ps = drbd_uuid_compare(peer_device, &rule, &unused);
 		put_ldev(peer_device->device);
 
 		if (strategy == NO_SYNC) {
@@ -7385,8 +7546,9 @@ static int receive_peer_dagtag(struct drbd_connection *connection, struct packet
 			    strategy != SYNC_SOURCE_USE_BITMAP &&
 			    strategy != SYNC_TARGET_USE_BITMAP) {
 				drbd_info(peer_device,
-					  "receive_peer_dagatg(): %s by rule %d\n",
-					  strategy_descriptor(strategy).name, rule_nr);
+					  "receive_peer_dagatg(): %s by rule=%s\n",
+					  strategy_descriptor(strategy).name,
+					  drbd_sync_rule_str(rule));
 				goto out;
 			}
 		} else if (ps != strategy) {
@@ -7845,7 +8007,8 @@ static void conn_disconnect(struct drbd_connection *connection)
 
 	/* restart sender thread,
 	 * potentially get it out of blocking network operations */
-	drbd_thread_restart_nowait(&connection->sender);
+	drbd_thread_stop(&connection->sender);
+	drbd_thread_start(&connection->sender);
 
 	drbd_transport_shutdown(connection, CLOSE_CONNECTION);
 
@@ -8611,7 +8774,7 @@ static int got_NegRSDReply(struct drbd_connection *connection, struct packet_inf
 			break;
 		case P_RS_CANCEL_AHEAD:
 			set_bit(SYNC_TARGET_TO_BEHIND, &peer_device->flags);
-			;/* fallthrough */
+			fallthrough;
 		case P_RS_CANCEL:
 			if (peer_device->repl_state[NOW] == L_VERIFY_S) {
 				verify_skipped_block(peer_device, sector, size);
@@ -8956,15 +9119,7 @@ int drbd_ack_receiver(struct drbd_thread *thi)
 	struct drbd_transport *transport = &connection->transport;
 	struct drbd_transport_ops *tr_ops = transport->ops;
 
-	struct sched_param param = {
-		.sched_priority = 2
-		};
-	int ____rv0;
-	____rv0 = sched_setscheduler(current, SCHED_RR, &param);
-	if (____rv0 < 0)
-		drbd_err(connection,
-			 "drbd_ack_receiver: ERROR set priority, ret=%d\n",
-			 ____rv0);
+	sched_set_fifo_low(current);
 
 	while (get_t_state(thi) == RUNNING) {
 		drbd_thread_current_set_cpu(thi);

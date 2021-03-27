@@ -270,46 +270,49 @@ bool resource_is_suspended(struct drbd_resource *resource, enum which_state whic
 }
 
 static void count_objects(struct drbd_resource *resource,
-			  unsigned int *n_devices,
-			  unsigned int *n_connections)
+			  struct drbd_state_change_object_count *ocnt)
 {
+	struct drbd_path *path;
 	struct drbd_device *device;
 	struct drbd_connection *connection;
 	int vnr;
 
 	lockdep_assert_held(&resource->state_rwlock);
 
-	*n_devices = 0;
-	*n_connections = 0;
+	ocnt->n_devices = 0;
+	ocnt->n_connections = 0;
+	ocnt->n_paths = 0;
 
 	idr_for_each_entry(&resource->devices, device, vnr)
-		(*n_devices)++;
-	for_each_connection(connection, resource)
-		(*n_connections)++;
+		ocnt->n_devices++;
+	for_each_connection(connection, resource) {
+		ocnt->n_connections++;
+		list_for_each_entry(path, &connection->transport.paths, list) {
+			ocnt->n_paths++;
+		}
+	}
 }
 
-static struct drbd_state_change *alloc_state_change(unsigned int n_devices, unsigned int n_connections, gfp_t flags)
+static struct drbd_state_change *alloc_state_change(struct drbd_state_change_object_count *ocnt, gfp_t flags)
 {
 	struct drbd_state_change *state_change;
-	unsigned int size, n;
+	unsigned int size;
 
 	size = sizeof(struct drbd_state_change) +
-	       n_devices * sizeof(struct drbd_device_state_change) +
-	       n_connections * sizeof(struct drbd_connection_state_change) +
-	       n_devices * n_connections * sizeof(struct drbd_peer_device_state_change);
-	state_change = kmalloc(size, flags);
+	       ocnt->n_devices * sizeof(struct drbd_device_state_change) +
+	       ocnt->n_connections * sizeof(struct drbd_connection_state_change) +
+	       ocnt->n_devices * ocnt->n_connections * sizeof(struct drbd_peer_device_state_change) +
+	       ocnt->n_paths * sizeof(struct drbd_path_state);
+	state_change = kzalloc(size, flags);
 	if (!state_change)
 		return NULL;
-	state_change->n_devices = n_devices;
-	state_change->n_connections = n_connections;
+	state_change->n_connections = ocnt->n_connections;
+	state_change->n_devices = ocnt->n_devices;
+	state_change->n_paths = ocnt->n_paths;
 	state_change->devices = (void *)(state_change + 1);
-	state_change->connections = (void *)&state_change->devices[n_devices];
-	state_change->peer_devices = (void *)&state_change->connections[n_connections];
-	state_change->resource->resource = NULL;
-	for (n = 0; n < n_devices; n++)
-		state_change->devices[n].device = NULL;
-	for (n = 0; n < n_connections; n++)
-		state_change->connections[n].connection = NULL;
+	state_change->connections = (void *)&state_change->devices[ocnt->n_devices];
+	state_change->peer_devices = (void *)&state_change->connections[ocnt->n_connections];
+	state_change->paths = (void*)&state_change->peer_devices[ocnt->n_devices*ocnt->n_connections];
 	return state_change;
 }
 
@@ -317,19 +320,19 @@ struct drbd_state_change *remember_state_change(struct drbd_resource *resource, 
 {
 	struct drbd_state_change *state_change;
 	struct drbd_device *device;
-	unsigned int n_devices;
 	struct drbd_connection *connection;
-	unsigned int n_connections;
+	struct drbd_state_change_object_count ocnt;
 	int vnr;
 
 	struct drbd_device_state_change *device_state_change;
 	struct drbd_peer_device_state_change *peer_device_state_change;
 	struct drbd_connection_state_change *connection_state_change;
+	struct drbd_path_state *path_state; /* yes, not a _change :-( */
 
 	lockdep_assert_held(&resource->state_rwlock);
 
-	count_objects(resource, &n_devices, &n_connections);
-	state_change = alloc_state_change(n_devices, n_connections, gfp);
+	count_objects(resource, &ocnt);
+	state_change = alloc_state_change(&ocnt, gfp);
 	if (!state_change)
 		return NULL;
 
@@ -384,7 +387,10 @@ struct drbd_state_change *remember_state_change(struct drbd_resource *resource, 
 	}
 
 	connection_state_change = state_change->connections;
+	path_state = state_change->paths;
 	for_each_connection(connection, resource) {
+		struct drbd_path *path;
+
 		kref_get(&connection->kref);
 		kref_debug_get(&connection->kref_debug, 7);
 		connection_state_change->connection = connection;
@@ -394,6 +400,21 @@ struct drbd_state_change *remember_state_change(struct drbd_resource *resource, 
 		       connection->peer_role, sizeof(connection->peer_role));
 		memcpy(connection_state_change->susp_fen,
 		       connection->susp_fen, sizeof(connection->susp_fen));
+
+		list_for_each_entry(path, &connection->transport.paths, list) {
+			/* Share the connection kref with above.
+			 * Could also share the pointer, but would then need to
+			 * remember an additional n_paths per connection
+			 * count/offset (connection_state_change->n_paths++)
+			 * to be able to associate the paths with its connection.
+			 * So why not directly store the pointer here again. */
+			path_state->connection = connection;
+			kref_get(&path->kref);
+			path_state->path = path;
+			path_state->path_established = path->established;
+
+			path_state++;
+		}
 
 		connection_state_change++;
 	}
@@ -472,6 +493,12 @@ void forget_state_change(struct drbd_state_change *state_change)
 		if (connection) {
 			kref_debug_put(&connection->kref_debug, 7);
 			kref_put(&connection->kref, drbd_destroy_connection);
+		}
+	}
+	for (n = 0; n < state_change->n_paths; n++) {
+		struct drbd_path *path = state_change->paths[n].path;
+		if (path) {
+			kref_put(&path->kref, drbd_destroy_path);
 		}
 	}
 	kfree(state_change);
@@ -930,14 +957,6 @@ union drbd_state drbd_get_device_state(struct drbd_device *device, enum which_st
 	rv.quorum = device->have_quorum[which];
 
 	return rv;
-}
-
-static bool resync_susp_comb_dep(struct drbd_peer_device *peer_device, enum which_state which)
-{
-	struct drbd_device *device = peer_device->device;
-
-	return peer_device->resync_susp_dependency[which] || peer_device->resync_susp_other_c[which] ||
-		(is_sync_source_state(peer_device, which) && device->disk_state[which] <= D_INCONSISTENT);
 }
 
 union drbd_state drbd_get_peer_device_state(struct drbd_peer_device *peer_device, enum which_state which)
@@ -2869,30 +2888,20 @@ void notify_device_state_change(struct sk_buff *skb,
 				enum drbd_notification_type type)
 {
 	struct drbd_device *device = device_state_change->device;
-	struct device_info device_info = {
-		.dev_disk_state = device_state_change->disk_state[NEW],
-		.is_intentional_diskless = device->device_conf.intentional_diskless,
-		.dev_has_quorum = device_state_change->have_quorum[NEW],
-	};
+	struct device_info device_info;
+	device_state_change_to_info(&device_info, device_state_change);
 
 	notify_device_state(skb, seq, device, &device_info, type);
 }
 
 void notify_peer_device_state_change(struct sk_buff *skb,
 				     unsigned int seq,
-				     struct drbd_peer_device_state_change *p,
+				     struct drbd_peer_device_state_change *state_change,
 				     enum drbd_notification_type type)
 {
-	struct drbd_peer_device *peer_device = p->peer_device;
-	/* THINK maybe unify with peer_device_to_info */
-	struct peer_device_info peer_device_info = {
-		.peer_repl_state = p->repl_state[NEW],
-		.peer_disk_state = p->disk_state[NEW],
-		.peer_resync_susp_user = p->resync_susp_user[NEW],
-		.peer_resync_susp_peer = p->resync_susp_peer[NEW],
-		.peer_resync_susp_dependency = resync_susp_comb_dep(peer_device, NEW),
-		.peer_is_intentional_diskless = !want_bitmap(peer_device),
-	};
+	struct drbd_peer_device *peer_device = state_change->peer_device;
+	struct peer_device_info peer_device_info;
+	peer_device_state_change_to_info(&peer_device_info, state_change);
 
 	notify_peer_device_state(skb, seq, peer_device, &peer_device_info, type);
 }
@@ -4207,16 +4216,19 @@ change_cluster_wide_state(bool (*change)(struct change_context *, enum change_ph
 				    &request, reach_immediately);
 	have_peers = rv == SS_CW_SUCCESS;
 	if (have_peers) {
+		long t;
+
 		if (context->mask.conn == conn_MASK && context->val.conn == C_CONNECTED &&
 		    target_connection->agreed_pro_version >= 118)
 			conn_connect2(target_connection);
 
-		if (wait_event_timeout(resource->state_wait,
-				       cluster_wide_reply_ready(resource),
-				       twopc_timeout(resource)))
+		t = wait_event_interruptible_timeout(resource->state_wait,
+						     cluster_wide_reply_ready(resource),
+						     twopc_timeout(resource));
+		if (t > 0)
 			rv = get_cluster_wide_reply(resource, context);
 		else
-			rv = SS_TIMEOUT;
+			rv = t == 0 ? SS_TIMEOUT : SS_INTERRUPTED;
 
 		if (rv == SS_CW_SUCCESS) {
 			u64 directly_reachable =

@@ -1036,15 +1036,14 @@ static int device_oldest_requests_show(struct seq_file *m, void *ignored)
 static int device_openers_show(struct seq_file *m, void *ignored)
 {
 	struct drbd_device *device = m->private;
-	struct drbd_resource *resource = device->resource;
 	ktime_t now = ktime_get_real();
 	struct opener *tmp;
 
-	mutex_lock(&resource->open_release);
-	list_for_each_entry(tmp, &device->openers.list, list)
+	spin_lock(&device->openers_lock);
+	list_for_each_entry(tmp, &device->openers, list)
 		seq_printf(m, "%s\t%d\t%lld\n", tmp->comm, tmp->pid,
 			ktime_to_ms(ktime_sub(now, tmp->opened)));
-	mutex_unlock(&resource->open_release);
+	spin_unlock(&device->openers_lock);
 
 	return 0;
 }
@@ -1740,6 +1739,7 @@ static int drbd_compat_show(struct seq_file *m, void *ignored)
 	seq_puts(m, "genl_policy__yes_in_ops\n");
 	seq_puts(m, "revalidate_disk_size__no_present\n");
 	seq_puts(m, "queue_discard_zeroes_data__no_present\n");
+	seq_puts(m, "crypto_tfm_need_key__no_present\n");
 	return 0;
 }
 
