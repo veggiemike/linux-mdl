@@ -573,6 +573,7 @@ enum device_flag {
         DESTROY_DISK,           /* tell worker to close backing devices and destroy related structures. */
 	MD_SYNC,		/* tell worker to call drbd_md_sync() */
 	MAKE_NEW_CUR_UUID,	/* tell worker to ping peers and eventually write new current uuid */
+	MAKE_RESYNC_REQUEST,	/* tell worker to send resync requests */
 
 	STABLE_RESYNC,		/* One peer_device finished the resync stable! */
 	READ_BALANCE_RR,
@@ -949,6 +950,7 @@ struct drbd_resource {
 	enum drbd_role role[2];
 	bool susp_user[2];			/* IO suspended by user */
 	bool susp_nod[2];		/* IO suspended because no data */
+	bool susp_quorum[2];		/* IO suspended because no quorum */
 	bool cached_susp;		/* cached result of looking at all different suspend bits */
 	bool cached_all_devices_have_quorum;
 
@@ -1212,7 +1214,6 @@ struct drbd_peer_device {
 	enum drbd_repl_state start_resync_side;
 	enum drbd_repl_state last_repl_state; /* What we received from the peer */
 	struct timer_list start_resync_timer;
-	struct drbd_work resync_work;
 	struct timer_list resync_timer;
 	struct drbd_work propagate_uuids_work;
 
@@ -1997,7 +1998,6 @@ extern int w_e_end_rsdata_req(struct drbd_work *, int);
 extern int w_e_end_csum_rs_req(struct drbd_work *, int);
 extern int w_e_end_ov_reply(struct drbd_work *, int);
 extern int w_e_end_ov_req(struct drbd_work *, int);
-extern int w_resync_timer(struct drbd_work *, int);
 extern int w_send_dblock(struct drbd_work *, int);
 extern int w_send_read_req(struct drbd_work *, int);
 extern int w_e_reissue(struct drbd_work *, int);
