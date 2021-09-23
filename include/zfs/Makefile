@@ -187,6 +187,7 @@ am__aclocal_m4_deps = $(top_srcdir)/config/always-arch.m4 \
 	$(top_srcdir)/config/kernel-siginfo.m4 \
 	$(top_srcdir)/config/kernel-signal-stop.m4 \
 	$(top_srcdir)/config/kernel-special-state.m4 \
+	$(top_srcdir)/config/kernel-stdarg.m4 \
 	$(top_srcdir)/config/kernel-super-userns.m4 \
 	$(top_srcdir)/config/kernel-symlink.m4 \
 	$(top_srcdir)/config/kernel-timer.m4 \
@@ -458,7 +459,7 @@ LDFLAGS =
 LIBAIO_CFLAGS = 
 LIBAIO_LIBS =  -laio
 LIBAIO_PC = 
-LIBATOMIC_LIBS = -latomic
+LIBATOMIC_LIBS = 
 LIBBLKID_CFLAGS = -I/usr/include/blkid -I/usr/include/uuid
 LIBBLKID_LIBS = -lblkid
 LIBBLKID_PC = blkid
@@ -483,7 +484,7 @@ LIBUUID_PC = uuid
 LINUX = /scrap/linux-mdl-5.14
 LINUX_OBJ = /scrap/linux-mdl-5.14
 LINUX_SYMBOLS = NONE
-LINUX_VERSION = 5.14.1-mdl+
+LINUX_VERSION = 5.14.5-mdl+
 LIPO = 
 LN_S = ln -s
 LTLIBICONV = -liconv
@@ -513,10 +514,10 @@ OTOOL64 =
 PACKAGE = zfs
 PACKAGE_BUGREPORT = 
 PACKAGE_NAME = zfs
-PACKAGE_STRING = zfs 2.1.0
+PACKAGE_STRING = zfs 2.1.1
 PACKAGE_TARNAME = zfs
 PACKAGE_URL = 
-PACKAGE_VERSION = 2.1.0
+PACKAGE_VERSION = 2.1.1
 PATH_SEPARATOR = :
 PKG_CONFIG = /usr/bin/pkg-config
 PKG_CONFIG_LIBDIR = 
@@ -538,7 +539,7 @@ QAT_OBJ =
 QAT_SRC = 
 QAT_SYMBOLS = 
 RANLIB = ranlib
-RELEASE = 4_g46df5d775
+RELEASE = 1
 RM = rm -f
 RPM = rpm
 RPMBUILD = rpmbuild
@@ -563,7 +564,7 @@ TARGET_CPU = x86_64
 TEST_JOBS = 16
 USE_NLS = yes
 VENDOR = ubuntu
-VERSION = 2.1.0
+VERSION = 2.1.1
 WITH_DEBUG = 
 WITH_INVARIANTS = 
 XGETTEXT = /usr/bin/xgettext
@@ -572,7 +573,7 @@ XGETTEXT_EXTRA_OPTIONS =
 ZFS_CONFIG = all
 ZFS_INIT_SYSTEMD = systemd
 ZFS_INIT_SYSV = init.d
-ZFS_META_ALIAS = zfs-2.1.0-4_g46df5d775
+ZFS_META_ALIAS = zfs-2.1.1-1
 ZFS_META_AUTHOR = OpenZFS
 ZFS_META_DATA = 
 ZFS_META_KVER_MAX = 5.14
@@ -582,8 +583,8 @@ ZFS_META_LT_AGE =
 ZFS_META_LT_CURRENT = 
 ZFS_META_LT_REVISION = 
 ZFS_META_NAME = zfs
-ZFS_META_RELEASE = 4_g46df5d775
-ZFS_META_VERSION = 2.1.0
+ZFS_META_RELEASE = 1
+ZFS_META_VERSION = 2.1.1
 ZFS_MODULE_LOAD = modules-load.d
 ZLIB_CFLAGS = 
 ZLIB_LIBS = -lz

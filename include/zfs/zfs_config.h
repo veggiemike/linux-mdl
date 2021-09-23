@@ -146,6 +146,9 @@
 /* blk_queue_secure_erase() is available */
 #define HAVE_BLK_QUEUE_SECURE_ERASE 1
 
+/* blk_queue_update_readahead() exists */
+#define HAVE_BLK_QUEUE_UPDATE_READAHEAD 1
+
 /* blk_queue_write_cache() exists */
 #define HAVE_BLK_QUEUE_WRITE_CACHE 1
 
@@ -203,6 +206,9 @@
 
 /* disk_*_io_acct() available */
 #define HAVE_DISK_IO_ACCT 1
+
+/* disk_update_readahead() exists */
+/* #undef HAVE_DISK_UPDATE_READAHEAD */
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
@@ -263,6 +269,12 @@
 
 /* Define if the GNU gettext() function is already present or preinstalled. */
 #define HAVE_GETTEXT 1
+
+/* iops->get_acl() exists */
+#define HAVE_GET_ACL 1
+
+/* iops->get_acl() takes rcu */
+/* #undef HAVE_GET_ACL_RCU */
 
 /* iops->get_link() cookie */
 /* #undef HAVE_GET_LINK_COOKIE */
@@ -582,6 +594,9 @@
 /* STACK_FRAME_NON_STANDARD is defined */
 #define HAVE_STACK_FRAME_NON_STANDARD 1
 
+/* standalone <linux/stdarg.h> exists */
+/* #undef HAVE_STANDALONE_LINUX_STDARG */
+
 /* Define to 1 if you have the <stdint.h> header file. */
 #define HAVE_STDINT_H 1
 
@@ -787,7 +802,7 @@
 /* #undef ZFS_IS_GPL_COMPATIBLE */
 
 /* Define the project alias string. */
-#define ZFS_META_ALIAS "zfs-2.1.0-4_g46df5d775"
+#define ZFS_META_ALIAS "zfs-2.1.1-1"
 
 /* Define the project author. */
 #define ZFS_META_AUTHOR "OpenZFS"
@@ -817,10 +832,10 @@
 #define ZFS_META_NAME "zfs"
 
 /* Define the project release. */
-#define ZFS_META_RELEASE "4_g46df5d775"
+#define ZFS_META_RELEASE "1"
 
 /* Define the project version. */
-#define ZFS_META_VERSION "2.1.0"
+#define ZFS_META_VERSION "2.1.1"
 
 /* count is located in percpu_ref.data */
 #define ZFS_PERCPU_REF_COUNT_IN_DATA 1
