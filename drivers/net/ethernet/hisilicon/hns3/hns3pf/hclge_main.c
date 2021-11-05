@@ -8701,15 +8701,8 @@ int hclge_add_uc_addr_common(struct hclge_vport *vport,
 	}
 
 	/* check if we just hit the duplicate */
-	if (!ret) {
-		dev_warn(&hdev->pdev->dev, "VF %u mac(%pM) exists\n",
-			 vport->vport_id, addr);
-		return 0;
-	}
-
-	dev_err(&hdev->pdev->dev,
-		"PF failed to add unicast entry(%pM) in the MAC table\n",
-		addr);
+	if (!ret)
+		return -EEXIST;
 
 	return ret;
 }
@@ -8861,7 +8854,13 @@ static void hclge_sync_vport_mac_list(struct hclge_vport *vport,
 		} else {
 			set_bit(HCLGE_VPORT_STATE_MAC_TBL_CHANGE,
 				&vport->state);
-			break;
+
+			/* If one unicast mac address is existing in hardware,
+			 * we need to try whether other unicast mac addresses
+			 * are new addresses that can be added.
+			 */
+			if (ret != -EEXIST)
+				break;
 		}
 	}
 }
@@ -11015,6 +11014,35 @@ static int hclge_set_pauseparam(struct hnae3_handle *handle, u32 auto_neg,
 	return -EOPNOTSUPP;
 }
 
+static int hclge_restore_pauseparam(struct hnae3_handle *handle)
+{
+	struct hclge_vport *vport = hclge_get_vport(handle);
+	struct hclge_dev *hdev = vport->back;
+	u32 auto_neg, rx_pause, tx_pause;
+	int ret;
+
+	hclge_get_pauseparam(handle, &auto_neg, &rx_pause, &tx_pause);
+	/* when autoneg is disabled, the pause setting of phy has no effect
+	 * unless the link goes down.
+	 */
+	ret = phy_suspend(hdev->hw.mac.phydev);
+	if (ret)
+		return ret;
+
+	phy_set_asym_pause(hdev->hw.mac.phydev, rx_pause, tx_pause);
+
+	ret = phy_resume(hdev->hw.mac.phydev);
+	if (ret)
+		return ret;
+
+	ret = hclge_mac_pause_setup_hw(hdev);
+	if (ret)
+		dev_err(&hdev->pdev->dev,
+			"restore pauseparam error, ret = %d.\n", ret);
+
+	return ret;
+}
+
 static void hclge_get_ksettings_an_result(struct hnae3_handle *handle,
 					  u8 *auto_neg, u32 *speed, u8 *duplex)
 {
@@ -12944,6 +12972,7 @@ static const struct hnae3_ae_ops hclge_ops = {
 	.halt_autoneg = hclge_halt_autoneg,
 	.get_pauseparam = hclge_get_pauseparam,
 	.set_pauseparam = hclge_set_pauseparam,
+	.restore_pauseparam = hclge_restore_pauseparam,
 	.set_mtu = hclge_set_mtu,
 	.reset_queue = hclge_reset_tqp,
 	.get_stats = hclge_get_stats,
@@ -13024,6 +13053,7 @@ static int hclge_init(void)
 
 static void hclge_exit(void)
 {
+	hnae3_unregister_ae_algo_prepare(&ae_algo);
 	hnae3_unregister_ae_algo(&ae_algo);
 	destroy_workqueue(hclge_wq);
 }
