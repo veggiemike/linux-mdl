@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 VERSION = 5
 PATCHLEVEL = 14
-SUBLEVEL = 16
+SUBLEVEL = 19
 EXTRAVERSION =
 NAME = Opossums on Parade
 
