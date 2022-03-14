@@ -1,0 +1,124 @@
+-*- org -*-
+
+* TODO
+- drbd 9.1.5
+- zfs 2.1.2
+
+* config history
+Started with Ubuntu Mainline's 5.16.5-051605-lowlatency Kernel Configuration.
+
+- General Setup
+  - Local version: -mdl
+  - Kernel compression: LZ4 (can't do zstd until we upgrade xen)
+  - Kernel .config support: Y
+    - /proc/config.gz: Y
+  - Kernel headers: N (was M)
+
+- Processor type
+  - Support for extended (non-PC) x86 platforms: N
+  - Supported processor vendors
+    - Hygon: N
+    - Centaur: N
+    - Zhaoxin: N
+  - Performance Monitoring
+    - AMD Processor Power Reporting Mechanism: M
+
+- Power Management and ACPI
+  - CPU frequency scaling
+    - default cpufreq governor: performance (was schedultil)
+
+- Memory Management
+  - Compressed cache for swap pages (EXPERIMENTAL): N
+
+- Block Layer
+  - Partition Types: Only the following
+    - PC BIOS
+    - Windows Logical Disk Manager
+    - EFI GUID
+
+- File Systems
+  - JFS: N
+  - NILFS2: N
+  - F2FS: N
+  - Overlay: Y (was M)
+  - DOS/FAT
+    - NTFS: N (the old read-only one)
+  - Misc: Only the following
+    - eCrypt: Y (was Y)
+      - notifications: Y (was Y)
+    - Squashfs: Y
+      - decompress directly to page cache
+      - parallelism: percpu (was single thread)
+      - XATTR: Y (was Y)
+      - ZLIB: Y (was Y)
+      - LZ4: Y (was Y)
+      - LZ0: Y (was Y)
+      - XZ: Y (was Y)
+      - ZSTD: Y (was Y)
+    - Persistent store: Y (was Y)
+      - 10240 (default)
+      - ZLIB: Y (was Y)
+      - log panic/oops to RAM: Y (was M)
+      - log panic/oops to disk: Y (was M)
+    - VirtualBox shared folder: M (was M)
+  - Network File Systems:
+    - CEPH: N
+    - SMB direct: Y
+    - Coda: N
+    - AFS: N
+    - Plan9: N
+
+- Device Drivers
+  - EISA: N (was Y)
+  - RapidIO: N (was Y)
+  - Generic Driver Options
+    - Support for uevent helper: N (was Y)
+  - Firmware Drivers
+    - Mark VGA/VBE/EFI FB as generic framebuffer: Y (was N)
+  - MTD support: N (was M)
+  - Parallel Port: N (was M)
+  - Block Devices
+    - Packet writing on CD/DVD: N (was M)
+  - Multiple Device support (RAID and LVM)
+    - Linear: N (was M)
+    - Multipath IO: N (was M)
+    - Faulty test mode: N (was M)
+  - Fusion MPT: N (was Y)
+  - FireWare: N (was all M)
+  - Mac drivers: N (was Y)
+  - ARCnet: N (was Y)
+  - ATM: N (was Y)
+  - CAIF: N (was Y)
+  - FDDI: N (was Y)
+  - Surfboard: N (was M)
+  - Micrel: N (was M)
+  - PPP: N (was Y, had to also go disable IPWIRELESS)
+  - SLIP: N (was Y)
+  - 802.15.4: N
+  - ISDN: N
+
+  - Input device support
+    - Event deugging: N (was M)
+  - Xen
+    - XEN PV Calls backend: M (was N)
+  - Graphics Support
+    - agpgart: N
+    - Console display driver
+      - Legacy fbcon acceleration: Y (was N?)
+    - Bootup logo: Y  (was N)
+      - black/white: Y
+      - 16color: Y
+      - 224color: Y
+
+  - Infiniband: N
+  - VME: N
+
+- Cryptographic API
+  - Certificates for signature checking
+    - Additional x.509 keys: -empty- (was a debian/canonical key)
+    - X.509 certs to preload: -empty- (was a debian/canonical key)
+
+- Kernel Hacking
+  - Compile-time checks
+    - debug info: N (was Y)
+    - vmlinux.map: N (was Y)
