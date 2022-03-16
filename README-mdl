@@ -101,8 +101,61 @@ Started with Ubuntu Mainline's 5.16.5-051605-lowlatency Kernel Configuration.
     - Event deugging: N (was M)
   - Xen
     - XEN PV Calls backend: M (was N)
+
+  - HID support
+    - USB HID
+      - USB HID Boot protocol
+        - Keyboard: N (ubuntu blacklist)
+        - Mouse: N (ubuntu blacklist)
+  - Input device
+    - Generic input layer
+      - Misc
+        - PC Speker: N (was M, ubuntu blacklist)
+
+  - Network Device
+    - Ethernet drivers
+      - Generic DECchip: N (was M, ubuntu blacklist)
+  - Sound Card
+    - ALSA
+      - Generic sound devices
+        - PC Speaker: N (was M, ubuntu blacklist)
+
+      - PCI
+        - Emagic Audiowerk 2: N (was M, ubuntu blacklist)
+        - Intel/sis/nvidia/amd MC97: N (was M, ubuntu blacklist)
+  - I2C
+    - I2C hardware bus support
+      - Intel 82801: N (was M, ubuntu blacklist)
+  - USB
+    - USB Serial Converter
+      - USB Garmin GPS: N (was M, ubuntu blacklist)
+
   - Graphics Support
     - agpgart: N
+    - Simple framebuffer: N (was M)
+    - Frame buffer devices
+      - support for frame buffer devices (only the following)
+        - Firmware EDID: Y
+        - Video Mode Helpers: Y
+        - Tile Blitting: Y
+        - Vesa VGA: Y
+        - EFI-based: Y
+        - nvidia: M
+          - DDC: Y
+          - backlight: Y
+        - Intel740: M
+        - Intel LE80578: M
+          - carillo ranch: Y
+        - ATI Radeon: M
+          - DDC/I2C: Y
+          - backlight: Y
+        - Xen: M
+        - Hyper-V: M
+        - Simple Frame Buffer: Y (was M, had to disable DRM_SIMPLEDRM)
+    - Console driver
+      - legacy fbcon hw accel: N (was Y)
+      - deferred takeover: N (was Y)
+
     - Console display driver
       - Legacy fbcon acceleration: Y (was N?)
     - Bootup logo: Y  (was N)
