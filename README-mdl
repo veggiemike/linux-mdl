@@ -132,7 +132,8 @@ Started with Ubuntu Mainline's 5.16.5-051605-lowlatency Kernel Configuration.
 
   - Graphics Support
     - agpgart: N
-    - Simple framebuffer: N (was M)
+    - DRM: Y (was M)
+    - Simple framebuffer: Y (was M)
     - Frame buffer devices
       - support for frame buffer devices (only the following)
         - Firmware EDID: Y
@@ -151,13 +152,10 @@ Started with Ubuntu Mainline's 5.16.5-051605-lowlatency Kernel Configuration.
           - backlight: Y
         - Xen: M
         - Hyper-V: M
-        - Simple Frame Buffer: Y (was M, had to disable DRM_SIMPLEDRM)
+        - Simple Frame Buffer: Y (was M, had to disable DRM_SIMPLEDRM) I think this is no, now
     - Console driver
-      - legacy fbcon hw accel: N (was Y)
       - deferred takeover: N (was Y)
 
-    - Console display driver
-      - Legacy fbcon acceleration: Y (was N?)
     - Bootup logo: Y  (was N)
       - black/white: Y
       - 16color: Y
