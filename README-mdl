@@ -13,6 +13,7 @@ Started with Ubuntu Mainline's 5.16.5-051605-lowlatency Kernel Configuration.
   - Kernel .config support: Y
     - /proc/config.gz: Y
   - Kernel headers: N (was M)
+  - PC/104 support: N
 
 - Processor type
   - Support for extended (non-PC) x86 platforms: N
@@ -27,6 +28,9 @@ Started with Ubuntu Mainline's 5.16.5-051605-lowlatency Kernel Configuration.
   - CPU frequency scaling
     - default cpufreq governor: performance (was schedultil)
 
+- Bus options
+  - ISA bus for modern systems: N
+
 - Memory Management
   - Compressed cache for swap pages (EXPERIMENTAL): N
 
@@ -40,6 +44,9 @@ Started with Ubuntu Mainline's 5.16.5-051605-lowlatency Kernel Configuration.
   - JFS: N
   - NILFS2: N
   - F2FS: N
+  - Old quota: N
+  - Old Kconfig automounter: N
+  - Kernel automounter: Y (was M)
   - Overlay: Y (was M)
   - DOS/FAT
     - NTFS: N (the old read-only one)
@@ -67,6 +74,17 @@ Started with Ubuntu Mainline's 5.16.5-051605-lowlatency Kernel Configuration.
     - Coda: N
     - AFS: N
     - Plan9: N
+  - Native Language Support (just the following)
+    - default: utf8
+    - Codepage 437: Y
+    - Codepage 850: Y
+    - Codepage 863: Y
+    - ASCII: Y
+    - NLS ISO 8859-1: Y
+    - NLS ISO 8859-15: Y
+    - Codepage macroman: Y
+    - NLS UTF-8: Y
+    
 
 - Device Drivers
   - EISA: N (was Y)
@@ -81,6 +99,7 @@ Started with Ubuntu Mainline's 5.16.5-051605-lowlatency Kernel Configuration.
     - Packet writing on CD/DVD: N (was M)
   - Multiple Device support (RAID and LVM)
     - Linear: N (was M)
+    - RAID-1: Y (was M)
     - Multipath IO: N (was M)
     - Faulty test mode: N (was M)
   - Fusion MPT: N (was Y)
