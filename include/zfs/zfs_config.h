@@ -855,6 +855,12 @@
 /* enum zone_stat_item contains NR_INACTIVE_FILE */
 /* #undef ZFS_ENUM_ZONE_STAT_ITEM_NR_INACTIVE_FILE */
 
+/* GENHD_FL_EXT_DEVT flag is not available */
+#define ZFS_GENHD_FL_EXT_DEVT 0
+
+/* GENHD_FL_NO_PART_SCAN flag is available */
+#define ZFS_GENHD_FL_NO_PART GENHD_FL_NO_PART
+
 /* global_node_page_state() exists */
 #define ZFS_GLOBAL_NODE_PAGE_STATE 1
 
