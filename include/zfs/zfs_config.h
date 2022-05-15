@@ -871,7 +871,7 @@
 /* #undef ZFS_IS_GPL_COMPATIBLE */
 
 /* Define the project alias string. */
-#define ZFS_META_ALIAS "zfs-2.1.4-2_gbb642187d"
+#define ZFS_META_ALIAS "zfs-2.1.4-3_g1c9b1f655"
 
 /* Define the project author. */
 #define ZFS_META_AUTHOR "OpenZFS"
@@ -901,7 +901,7 @@
 #define ZFS_META_NAME "zfs"
 
 /* Define the project release. */
-#define ZFS_META_RELEASE "2_gbb642187d"
+#define ZFS_META_RELEASE "3_g1c9b1f655"
 
 /* Define the project version. */
 #define ZFS_META_VERSION "2.1.4"

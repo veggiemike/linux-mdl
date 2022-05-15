@@ -39,7 +39,7 @@ all:
 	mkdir -p lib
 
 gensymbols:
-	for obj in $(vanilla-objs); do echo; echo "/* $$obj: */"; objdump -t $$obj | awk '$$2 == "g" && !/ zfs_/ {print "#define\t" $$6 " zfs_" $$6}' | sort; done >> include/zstd_compat_wrapper.h
+	objdump -t lib/zstd.o | awk '$$2 == "g" && !/ zfs_/ {print "#define\t" $$6 " zfs_" $$6}' | sort >> include/zstd_compat_wrapper.h
 
 checksymbols:
-	objdump -t $(vanilla-objs) | awk '/file format/ {print}  $$2 == "g" && !/ zfs_/ {++ret; print}  END {exit ret}'
+	objdump -t lib/zstd.o | awk '/file format/ {print}  $$2 == "g" && !/ zfs_/ {++ret; print}  END {exit ret}'
