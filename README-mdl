@@ -1,10 +1,28 @@
 -*- org -*-
 
 * TODO
-- drbd 9.1.5
-- zfs 2.1.2
+- drbd 9.1.7
+- zfs 2.1.4
 
-* config history
+* config history 5.17
+Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
+'make menuconfig', exit and save.
+
+- Power Management
+  - ACPI
+    - ACPI Platform Firmware Runtime Udate and Telemetry: M (was N)
+  - CPU Frequency scaling
+    - AMD Processor P-state driver: Y (was N)
+
+- Memory Management
+  - Anonymous VMA name support: Y (was N)
+
+- Device Drivers
+  - USB support
+    - Xen USB virtual host driver: M (was N)
+
+
+* config history 5.16
 Started with Ubuntu Mainline's 5.16.5-051605-lowlatency Kernel Configuration.
 
 - General Setup
