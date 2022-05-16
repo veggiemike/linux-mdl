@@ -1,7 +1,6 @@
 -*- org -*-
 
 * TODO
-- drbd 9.1.7
 
 
 * config history 5.17
@@ -18,6 +17,8 @@ Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
   - Anonymous VMA name support: Y (was N)
 
 - Device Drivers
+  - Block devices
+    - DRBD: Y (after removing DRBD8 and merging DRBD9 code in)
   - USB support
     - Xen USB virtual host driver: M (was N)
 
