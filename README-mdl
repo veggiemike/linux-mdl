@@ -2,7 +2,7 @@
 
 * TODO
 - drbd 9.1.7
-- zfs 2.1.4
+
 
 * config history 5.17
 Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
@@ -20,6 +20,9 @@ Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
 - Device Drivers
   - USB support
     - Xen USB virtual host driver: M (was N)
+
+- File systems
+  - ZFS: Y (after merging code in from OpenZFS)
 
 
 * config history 5.16
