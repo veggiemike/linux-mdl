@@ -7,6 +7,9 @@
 Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
 'make menuconfig', exit and save.
 
+- General setup
+  - Include all symbols in kallsyms: N (was Y, had to disable debugging first)
+
 - Power Management
   - ACPI
     - ACPI Platform Firmware Runtime Udate and Telemetry: M (was N)
@@ -35,6 +38,34 @@ Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
   - ZFS: Y (after merging code in from OpenZFS)
   - Reiserfs: N (was M)
   - zonefs: N (was M)
+
+- Kernel Hacking
+  - printk and dmesg options
+    - Delay each boot printk: N (was Y)
+  - Generic kernel debugging
+    - KDB: N (was Y)
+    - Undefined behavior sanity checker: N (was Y)
+  - Misc debug code: N (was Y)
+  - Memory Debuggin:
+    - Poison pages after freeing: N (was Y)
+    - KFENCE: N (was Y)
+  - Scheduler debugging:
+    - Collect scheduler debug info: N (was Y)
+    - Collect scheduler statistics: N (was Y)
+  - Stack backtrace: N (was Y)
+  - Latency measuring infrastructure: N (was Y)
+  - Tracers: N (was Y)
+  - Sample kernel code: N (was Y)
+  - x86 debugging:
+    - Early printk: N (was Y)
+    - IO delay type: port 0x80 [recommended] (was 0xed)
+    - Debug the x86 FPU code: N (was Y)
+    - ATOM Punit debug driver: N (was M)
+    - Choose kernel unwinder: ORC (was Frame Pointer)
+  - Kernel Testing and Coverage
+    - Notifier error injection: N (was M)
+    - Runtime Testing: N (was Y)
+    - Memtest: N (was Y)
 
 
 * config history 5.16
