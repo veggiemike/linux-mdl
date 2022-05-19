@@ -16,6 +16,15 @@ Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
 - Memory Management
   - Anonymous VMA name support: Y (was N)
 
+- Networking support
+  - Amateur Radio: N (was Y)
+  - CAN bus: N (was M)
+  - RxRPC session sockets: N (was M)
+  - KCM sockets: N (was M)
+  - Plan9 Resource Sharing: N (was M)
+  - CAIF support: N (was M)
+  - NFC support: N (was M)
+
 - Device Drivers
   - Block devices
     - DRBD: Y (after removing DRBD8 and merging DRBD9 code in)
@@ -24,6 +33,8 @@ Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
 
 - File systems
   - ZFS: Y (after merging code in from OpenZFS)
+  - Reiserfs: N (was M)
+  - zonefs: N (was M)
 
 
 * config history 5.16
