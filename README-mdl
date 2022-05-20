@@ -58,8 +58,13 @@ Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
   - SPI: N (was Y)
   - SPMI: N (was M)
   - HSI: N (was M)
+  - Voltage and Current Regulator
+    - No to all but:
+      - Fixed voltage regulator: M (was selected via depends)
+
   - USB support
     - Xen USB virtual host driver: M (was N)
+  - Greybus: N (was M)
   - Data acquisition (comedi): N (was M)
   - Staging drivers: N (was Y)
   - Platform support for Chrome hardware: N (was Y)
