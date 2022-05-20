@@ -1,6 +1,19 @@
 -*- org -*-
 
+Fork of the mainline Linux kernel with interesting out-of-tree projects (e.g.,
+DRBD9, OpenZFS) merged in and updated for the last couple longterm series.
+
+The following upstream projects have been merged in, with compilation problems
+fixed as needed.
+
+- OpenZFS v2.1.4
+- DRBD v9.1.7
+
+I've also started controlling my .config in here, to make my life easier.
+
+
 * TODO
+- config: shrink things down a bit
 
 
 * config history 5.17
@@ -9,12 +22,22 @@ Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
 
 - General setup
   - Include all symbols in kallsyms: N (was Y, had to disable debugging first)
+  - Profiling support: N (was Y)
 
 - Power Management
   - ACPI
     - ACPI Platform Firmware Runtime Udate and Telemetry: M (was N)
   - CPU Frequency scaling
     - AMD Processor P-state driver: Y (was N)
+
+- Binary emulation
+  - x32 ABI: N (was Y)
+
+- General architecture-dependent options
+  - Kprobes: N (was Y)
+
+- Enable loadable module support
+  - Module versioning: N (was Y)
 
 - Memory Management
   - Anonymous VMA name support: Y (was N)
@@ -31,8 +54,31 @@ Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
 - Device Drivers
   - Block devices
     - DRBD: Y (after removing DRBD8 and merging DRBD9 code in)
+  - I3C: N (was M)
+  - SPI: N (was Y)
+  - SPMI: N (was M)
+  - HSI: N (was M)
   - USB support
     - Xen USB virtual host driver: M (was N)
+  - Data acquisition (comedi): N (was M)
+  - Staging drivers: N (was Y)
+  - Platform support for Chrome hardware: N (was Y)
+  - Platform support for Mellanox hardware: N (was Y)
+  - Microsoft Surface platform specific drivers: N (was Y)
+  - Industrial I/O: N (was M)
+  - Non-Transparent Bridge support: N (was M)
+  - Pulse Width Modulation: N (was Y)
+  - IndustryPack: N (was M)
+  - MCB: N (was M)
+  - Android
+    - Android Drivers: N (was Y)
+  - FPGA Configuration: N (was M)
+  - Unisys visorbus: N (was M)
+  - Eckelmann SIOX: N (was M)
+  - SLIMbus: N (was M)
+  - On-Chip Interconnect: N (was Y)
+  - Counter: N (was M)
+  - MOST: N (was M)
 
 - File systems
   - ZFS: Y (after merging code in from OpenZFS)
