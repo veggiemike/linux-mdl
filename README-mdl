@@ -13,7 +13,7 @@ I've also started controlling my .config in here, to make my life easier.
 
 * TODO
 - OpenZFS v2.1.5 (once released)
-- DRBD v9.1.7
+- DRBD v9.1.7 (or newer, once it compiles)
 
 
 * config history 5.18
@@ -290,9 +290,9 @@ Started with Ubuntu Mainline's 5.16.5-051605-lowlatency Kernel Configuration.
           - backlight: Y
         - Xen: M
         - Hyper-V: M
-        - Simple Frame Buffer: Y (was M, had to disable DRM_SIMPLEDRM) I think this is no, now
+        - Simple Frame Buffer: Y (was M originally, I think)
     - Console driver
-      - deferred takeover: N (was Y)
+      - deferred takeover: Y (was Y originally, I think)
 
     - Bootup logo: Y  (was N)
       - black/white: Y
