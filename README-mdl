@@ -20,6 +20,13 @@ I've also started controlling my .config in here, to make my life easier.
 Started with my mdl/5.17 .config, see history below.  Accepted all defaults by
 'make menuconfig', exit and save.
 
+- Device Drivers
+  - Xen driver support
+    - Xen /dev/xen/evtchn device: Y (was M)
+    - Xen filesystem: Y (was M)
+    - userspace grant access device driver: Y (was M)
+    - User-space grant reference allocator driver: Y (was M)
+
 * config history 5.17
 Started with my mdl/5.16 .config, see history below.  Accepted all defaults by
 'make menuconfig', exit and save.
