@@ -6,16 +6,59 @@ DRBD9, OpenZFS) merged in and updated for the last couple longterm series.
 The following upstream projects have been merged in, with compilation problems
 fixed as needed.
 
-- OpenZFS v2.1.5
-- DRBD v9.1.9-rc1 (although I'm not sure my patches are quite right)
+- 
 
 I've also started controlling my .config in here, to make my life easier.
 
 
 * TODO
+- OpenZFS v2.1.5 (if it compiles)
 - OpenZFS v2.1.6 (when it's released)
 - DRBD v9.1.9 (or newer, once it compiles)
 
+
+* config history 5.19
+Started with my mdl/5.18 .config, see history below.  Walked through 'make
+oldconfig' and accepted defaults with the following modifications:
+
+- Linux Guest Support
+  - Intel TDX: Y (default was N)
+- Performance Monitoring
+  - AMD Zen3 Branch Sampling support (PERF_EVENTS_AMD_BRS): Y (default was N)
+- Enable Loadable Module Suport
+  - Tainted module unload tracking (MODULE_UNLOAD_TAINT_TRACKING): Y (default was N)
+- Firmware Loader
+  - Enable ZSTD-compressed firmware support (FW_LOADER_COMPRESS_ZSTD): Y (default was N)
+  - Enable users to initiate firmware updates using sysfs (FW_UPLOAD): Y (default was N)
+- EFI Support
+  - EFI Confidential Computing Secret Area Support (EFI_COCO_SECRET): Y (default was N)
+- Misc Devices
+  - Intel MEI GSC embedded device (INTEL_MEI_GSC): M (default was N)
+- Ethernet Drivers (M to all new drivers)
+- PHY devices (M to all new drivers)
+- Wireless LAN (M to all new drivers)
+- Wireless WAN (M to all new drivers)
+- Joysticks (M to all new drivers)
+- Hardware Monitoring (M to all new drivers)
+- Voltage and Current Regulator (N to all new drivers)
+- CODEC drivers (M to all new drivers)
+- Special HID (M to all new drivers)
+- Virtualization drivers
+  - EFI secret area securityfs support (EFI_SECRET): Y (default was N)
+- Xen driver support
+  - Xen virtio support (XEN_VIRTIO): Y (default was N)
+  - Require Xen virtio support to use grants (XEN_VIRTIO_FORCE_GRANT): Y (default was N)
+- x86 drivers (M to all new drivers)
+- Hardware Timestamping Engine (HTE) Support (HTE): Y (default was N)
+- Caches
+  - Support for on-demand read (CACHEFILES_ONDEMAND): Y (default was N)
+- Cryptographic API
+  - Digests (M to all new)
+  - Ciphers (M to all new)
+  - Asymmetric
+    - Run FIPS selftests on the X.509+PKCS7 signature verification (FIPS_SIGNATURE_SELFTEST): Y (default was N)
+  - Certificates
+    - Allow root to add signed blacklist keys (SYSTEM_BLACKLIST_AUTH_UPDATE): Y (default was N)
 
 * config history 5.18
 Started with my mdl/5.17 .config, see history below.  Accepted all defaults by
