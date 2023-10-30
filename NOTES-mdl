@@ -1,8 +1,57 @@
 -*- org -*-
 
 * TODO
+- play with CONFIG_FW_LOADER_DEBUG! might not need by fw loading patch anymore!
+- OpenZFS latest
+- DRBD latest
 - Test OpenZFS 2.2.0-rc3?
 - Shrink config down more?
+
+
+* config history 6.6
+Started with my mdl/6.1 .config, see history below.  Walked through 'make
+oldconfig' and accepted most of the defaults.  Unless noted, new drivers got M,
+new features for drivers got Y unless experimental or debug.
+
+- Network device support
+  - Microchip KSZ8795/KSZ9477/LAN937x series switch support: Y
+  - Qualcomm Atheros QCA8K Ethernet switch family LEDs support (NET_DSA_QCA8K_LEDS_SUPPORT): Y
+- Voltage and Current Regulator Support (N to all new, becuase alrady N to all before)
+- Compute Acceleration Framework: Y
+  - M to all drivers
+- Xen driver support
+  - Xen irqfd support (XEN_PRIVCMD_IRQFD) [N/y/?] (NEW) Y
+- IOMMU Hardware Support
+  - IOMMU Userspace API (IOMMUFD): M
+- Pseudo filesystems
+  - Tmpfs quota support (TMPFS_QUOTA): Y
+- Miscellaneous filesystems
+  - Select the parallel decompression mode during mount (SQUASHFS_CHOICE_DECOMP_BY_MOUNT) [N/y/?] (NEW **** what is this ***
+- Network File Systems
+  - NFS server support for NFS version 2 (DEPRECATED) (NFSD_V2): N (default was N, but worth mentioning)
+- Library routines
+  - Dynamic allocation of DMA bounce buffers (SWIOTLB_DYNAMIC): Y (was N)
+
+Then made the following changes:
+
+- Device drivers
+  - PCCard (PCMCIA/CardBus) support: N
+  - Bus devices
+    - Modem Host Interface (MHI) bus Endpoint implementation: M
+  - GNSS receiver support
+    - USB GNSS receiver support: M
+  - NVME Support
+    - NVM Express over Fabrics RDMA host driver: M
+    - NVM Express over Fabrics In-Band Authentication: Y
+    - NVMe over Fabrics RDMA target support : M
+    - NVMe over Fabrics In-band Authentication support: Y
+  - Generic Target Core Mod (TCM) and ConfigFS Infrastructure
+    - TCM Virtual Remote target
+  - Distributed Switch Architecture drivers
+    - Realtek Ethernet switch family support (M and all --> M)
+- File Systems
+  - GFS2: N (was M, but I never use this)
+  - OCSF2: N (was M, but I never use this)
 
 
 * config history 6.1

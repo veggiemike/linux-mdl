@@ -10,8 +10,7 @@ couple longterm series.
 The following upstream projects have been merged in, with compilation problems
 fixed as needed.
 
-- OpenZFS v2.1.12
-- DRBD v9.2.5
+- in progress
 
 I've also started controlling my .config in git, to make my life easier.
 
