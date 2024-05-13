@@ -58,6 +58,7 @@ drbd-y += drbd_sender.o drbd_receiver.o drbd_req.o drbd_actlog.o
 drbd-y += drbd_main.o drbd_strings.o drbd_nl.o
 drbd-y += drbd_interval.o drbd_state.o $(compat_objs)
 drbd-y += drbd_nla.o drbd_transport.o
+drbd-y += drbd_transport_lb-tcp.c
 
 ifdef CONFIG_KREF_DEBUG
       drbd-y += kref_debug.o drbd_kref_debug.o
