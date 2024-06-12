@@ -1,3 +1,4 @@
+# 1 "/scrap/drbd/drbd/drbd_bitmap.c"
 // SPDX-License-Identifier: GPL-2.0-only
 /*
    drbd_bitmap.c
@@ -477,6 +478,36 @@ static void bm_unmap(struct drbd_bitmap *bitmap, void *addr)
 		kunmap_atomic(addr);
 }
 
+
+/*
+ * find_next_bit() and find_next_zero_bit() expect an (unsigned long *),
+ * and will dereference it.
+ * When scanning our bitmap, we are interested in 32bit words of it.
+ * The "current 32 bit word pointer" may point to the last 32 bits in a page.
+ * For 64bit long, if the page after the current page is not mapped,
+ * this causes "page fault - not-present page".
+ * Duplicate the "fast path" of these functions,
+ * simplified for "size: 32, offset: 0".
+ * Little endian arch: le32_to_cpu is a no-op.
+ * Big endian arch: le32_to_cpu moves the least significant 32 bits around.
+ * __ffs / ffz do an implicit cast to (unsignd long). On 64bit, that fills up
+ * the most significant bits with 0; we are not interested in those anyways.
+ */
+static inline unsigned long find_next_bit_le32(const __le32 *addr)
+{
+	uint32_t val = *addr;
+
+	return val ? __ffs(le32_to_cpu(val)) : 32;
+}
+
+static inline unsigned long find_next_zero_bit_le32(const __le32 *addr)
+{
+	uint32_t val = *addr;
+
+	return val == ~0U ? 32 : ffz(le32_to_cpu(val));
+}
+
+
 static __always_inline unsigned long
 ____bm_op(struct drbd_device *device, unsigned int bitmap_index, unsigned long start, unsigned long end,
 	 enum bitmap_operations op, __le32 *buffer)
@@ -577,14 +608,18 @@ ____bm_op(struct drbd_device *device, unsigned int bitmap_index, unsigned long s
 				*buffer++ = *p;
 				break;
 			case BM_OP_FIND_BIT:
-				count = find_next_bit_le(addr, bit_in_page + 32, bit_in_page);
-				if (count < bit_in_page + 32)
+				count = find_next_bit_le32(p);
+				if (count < 32) {
+					count += bit_in_page;
 					goto found;
+				}
 				break;
 			case BM_OP_FIND_ZERO_BIT:
-				count = find_next_zero_bit_le(addr, bit_in_page + 32, bit_in_page);
-				if (count < bit_in_page + 32)
+				count = find_next_zero_bit_le32(p);
+				if (count < 32) {
+					count += bit_in_page;
 					goto found;
+				}
 				break;
 			}
 			start += 32;
@@ -1140,9 +1175,16 @@ static void bm_page_io_async(struct drbd_bm_aio_ctx *ctx, int page_nr) __must_ho
 	struct page *page;
 	sector_t last_bm_sect;
 	sector_t first_bm_sect;
+# 5 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
+# 1177 "/scrap/drbd/drbd/drbd_bitmap.c"
 	sector_t on_disk_sector;
 	unsigned int len;
+# 1180 "/scrap/drbd/drbd/drbd_bitmap.c"
+# 8 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
+# 1183 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_bitmap.c"
 	unsigned int op = ctx->flags & BM_AIO_READ ? REQ_OP_READ : REQ_OP_WRITE;
+# 9 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
+# 1180 "/scrap/drbd/drbd/drbd_bitmap.c"
 
 	first_bm_sect = device->ldev->md.md_offset + device->ldev->md.bm_offset;
 	on_disk_sector = first_bm_sect + (((sector_t)page_nr) << (PAGE_SHIFT-SECTOR_SHIFT));
@@ -1186,13 +1228,23 @@ static void bm_page_io_async(struct drbd_bm_aio_ctx *ctx, int page_nr) __must_ho
 	} else
 		page = b->bm_pages[page_nr];
 
+# 1225 "/scrap/drbd/drbd/drbd_bitmap.c"
+# 18 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
+# 1234 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_bitmap.c"
 	bio = bio_alloc_bioset(GFP_NOIO, 1, &drbd_md_io_bio_set);
 	bio_set_dev(bio, device->ldev->md_bdev);
+# 20 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
+# 1225 "/scrap/drbd/drbd/drbd_bitmap.c"
 	bio->bi_iter.bi_sector = on_disk_sector;
 	__bio_add_page(bio, page, len, 0);
 	bio->bi_private = ctx;
 	bio->bi_end_io = drbd_bm_endio;
+# 1229 "/scrap/drbd/drbd/drbd_bitmap.c"
+# 24 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
+# 1243 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_bitmap.c"
 	bio->bi_opf = op;
+# 25 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
+# 1229 "/scrap/drbd/drbd/drbd_bitmap.c"
 
 	if (drbd_insert_fault(device, (op == REQ_OP_WRITE) ? DRBD_FAULT_MD_WR : DRBD_FAULT_MD_RD)) {
 		bio->bi_status = BLK_STS_IOERR;

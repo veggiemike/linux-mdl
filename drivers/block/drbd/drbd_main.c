@@ -1,3 +1,4 @@
+# 1 "/scrap/drbd/drbd/drbd_main.c"
 // SPDX-License-Identifier: GPL-2.0-only
 /*
    drbd_main.c
@@ -52,10 +53,17 @@
 #include "drbd_vli.h"
 #include "drbd_debugfs.h"
 #include "drbd_meta_data.h"
+# 5 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 55 "/scrap/drbd/drbd/drbd_main.c"
 #include "drbd_dax_pmem.h"
 
+# 59 "/scrap/drbd/drbd/drbd_main.c"
+# 9 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 61 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 static int drbd_open(struct block_device *bdev, fmode_t mode);
 static void drbd_release(struct gendisk *gd, fmode_t mode);
+# 11 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 59 "/scrap/drbd/drbd/drbd_main.c"
 static void md_sync_timer_fn(struct timer_list *t);
 static int w_bitmap_io(struct drbd_work *w, int unused);
 static int flush_send_buffer(struct drbd_connection *connection, enum drbd_stream drbd_stream);
@@ -134,8 +142,6 @@ unsigned int drbd_protocol_version_min = PRO_VERSION_MIN;
 module_param_named(protocol_version_min, drbd_protocol_version_min, drbd_protocol_version, 0644);
 
 
-/* defined in drbd_nl.c, where it is used */
-int param_set_drbd_strict_names(const char *s, const struct kernel_param *kp);
 #define param_check_drbd_strict_names		param_check_bool
 #define param_get_drbd_strict_names		param_get_bool
 const struct kernel_param_ops param_ops_drbd_strict_names = {
@@ -1601,7 +1607,12 @@ int drbd_send_sizes(struct drbd_peer_device *peer_device,
 			cpu_to_be32(bdev_alignment_offset(bdev));
 		p->qlim->io_min = cpu_to_be32(bdev_io_min(bdev));
 		p->qlim->io_opt = cpu_to_be32(bdev_io_opt(bdev));
+# 1603 "/scrap/drbd/drbd/drbd_main.c"
+# 19 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 1613 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 		p->qlim->discard_enabled = !!bdev_get_queue(bdev)->limits.max_discard_sectors;
+# 20 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 1603 "/scrap/drbd/drbd/drbd_main.c"
 		p->qlim->write_same_capable = 0;
 		put_ldev(device);
 	} else {
@@ -2353,7 +2364,12 @@ int drbd_send_dblock(struct drbd_peer_device *peer_device, struct drbd_request *
 	int digest_size = 0;
 	int err;
 	const unsigned s = req->net_rq_state[peer_device->node_id];
+# 2355 "/scrap/drbd/drbd/drbd_main.c"
+# 28 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2370 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 	const unsigned int op = bio_op(req->master_bio);
+# 29 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2355 "/scrap/drbd/drbd/drbd_main.c"
 
 	if (op == REQ_OP_DISCARD || op == REQ_OP_WRITE_ZEROES) {
 		trim = drbd_prepare_command(peer_device, sizeof(*trim), DATA_STREAM);
@@ -2658,10 +2674,20 @@ enum ioc_rv {
 	IOC_ABORT = 2,
 };
 
+# 2660 "/scrap/drbd/drbd/drbd_main.c"
+# 37 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2680 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 static enum ioc_rv inc_open_count(struct drbd_device *device, fmode_t mode)
+# 38 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2660 "/scrap/drbd/drbd/drbd_main.c"
 {
 	struct drbd_resource *resource = device->resource;
+# 2663 "/scrap/drbd/drbd/drbd_main.c"
+# 41 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2686 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 	enum ioc_rv r = mode & FMODE_NDELAY ? IOC_ABORT : IOC_SLEEP;
+# 42 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2663 "/scrap/drbd/drbd/drbd_main.c"
 
 	if (test_bit(DOWN_IN_PROGRESS, &resource->flags))
 		return IOC_ABORT;
@@ -2672,7 +2698,12 @@ static enum ioc_rv inc_open_count(struct drbd_device *device, fmode_t mode)
 	else if (!resource->remote_state_change) {
 		r = IOC_OK;
 		device->open_cnt++;
+# 2674 "/scrap/drbd/drbd/drbd_main.c"
+# 50 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2704 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 		if (mode & FMODE_WRITE)
+# 51 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2674 "/scrap/drbd/drbd/drbd_main.c"
 			device->writable = true;
 	}
 	read_unlock_irq(&resource->state_rwlock);
@@ -2747,9 +2778,19 @@ out:
 	spin_unlock(&device->openers_lock);
 }
 
+# 2749 "/scrap/drbd/drbd/drbd_main.c"
+# 59 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2784 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 static int drbd_open(struct block_device *bdev, fmode_t mode)
+# 60 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2749 "/scrap/drbd/drbd/drbd_main.c"
 {
+# 2751 "/scrap/drbd/drbd/drbd_main.c"
+# 62 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2789 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 	struct drbd_device *device = bdev->bd_disk->private_data;
+# 63 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2751 "/scrap/drbd/drbd/drbd_main.c"
 	struct drbd_resource *resource = device->resource;
 	long timeout = resource->res_opts.auto_promote_timeout * HZ / 10;
 	bool was_writable;
@@ -2758,7 +2799,12 @@ static int drbd_open(struct block_device *bdev, fmode_t mode)
 	int err = 0;
 
 	/* Fail read-only open from systemd-udev (version <= 238) */
+# 2760 "/scrap/drbd/drbd/drbd_main.c"
+# 71 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2805 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 	if (!(mode & FMODE_WRITE) && !drbd_allow_oos) {
+# 72 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2760 "/scrap/drbd/drbd/drbd_main.c"
 		char comm[TASK_COMM_LEN];
 		get_task_comm(comm, current);
 		if (!strcmp("systemd-udevd", comm))
@@ -2767,7 +2813,12 @@ static int drbd_open(struct block_device *bdev, fmode_t mode)
 
 	/* Fail read-write open early,
 	 * in case someone explicitly set us read-only (blockdev --setro) */
+# 2769 "/scrap/drbd/drbd/drbd_main.c"
+# 80 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2819 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 	if (bdev_read_only(bdev) && (mode & FMODE_WRITE))
+# 81 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2769 "/scrap/drbd/drbd/drbd_main.c"
 		return -EACCES;
 
 	if (resource->fail_io[NOW])
@@ -2797,17 +2848,32 @@ static int drbd_open(struct block_device *bdev, fmode_t mode)
 		   This avoids split brain when the drbd volume gets opened
 		   temporarily by udev while it scans for PV signatures. */
 
+# 2799 "/scrap/drbd/drbd/drbd_main.c"
+# 89 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2854 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 		if (mode & FMODE_WRITE) {
+# 90 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2799 "/scrap/drbd/drbd/drbd_main.c"
 			if (resource->role[NOW] == R_SECONDARY) {
+# 2801 "/scrap/drbd/drbd/drbd_main.c"
+# 92 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2859 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 				rv = try_to_promote(device, timeout,
 						    (mode & FMODE_NDELAY));
+# 94 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2801 "/scrap/drbd/drbd/drbd_main.c"
 				if (rv < SS_SUCCESS)
 					drbd_info(resource, "Auto-promote failed: %s (%d)\n",
 						  drbd_set_st_err_str(rv), rv);
 				else
 					did_auto_promote = true;
 			}
+# 2808 "/scrap/drbd/drbd/drbd_main.c"
+# 101 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2870 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 		} else if ((mode & FMODE_NDELAY) == 0) {
+# 102 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2808 "/scrap/drbd/drbd/drbd_main.c"
 			/* Double check peers
 			 *
 			 * Some services may try to first open ro, and only if that
@@ -2827,14 +2893,24 @@ static int drbd_open(struct block_device *bdev, fmode_t mode)
 			}
 		}
 	} else if (resource->role[NOW] != R_PRIMARY &&
+# 2828 "/scrap/drbd/drbd/drbd_main.c"
+# 110 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2899 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 			!(mode & FMODE_WRITE) && !drbd_allow_oos) {
+# 111 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2828 "/scrap/drbd/drbd/drbd_main.c"
 		err = -EMEDIUMTYPE;
 		goto out;
 	}
 
 	if (test_bit(UNREGISTERED, &device->flags)) {
 		err = -ENODEV;
+# 2835 "/scrap/drbd/drbd/drbd_main.c"
+# 118 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2909 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 	} else if (mode & FMODE_WRITE) {
+# 119 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2835 "/scrap/drbd/drbd/drbd_main.c"
 		if (resource->role[NOW] != R_PRIMARY)
 			err = -EROFS;
 	} else /* READ access only */ {
@@ -2849,8 +2925,13 @@ out:
 
 	mutex_unlock(&resource->open_release);
 	if (err) {
+# 2851 "/scrap/drbd/drbd/drbd_main.c"
+# 128 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2931 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 		drbd_release(bdev->bd_disk, 0);
 		if (err == -EAGAIN && !(mode & FMODE_NDELAY))
+# 130 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2851 "/scrap/drbd/drbd/drbd_main.c"
 			err = -EMEDIUMTYPE;
 	}
 
@@ -2895,7 +2976,7 @@ restart:
 	rcu_read_unlock();
 }
 
-void drbd_fsync_device(struct drbd_device *device)
+static void drbd_fsync_device(struct drbd_device *device)
 {
 	struct drbd_resource *resource = device->resource;
 
@@ -2931,7 +3012,12 @@ void drbd_fsync_device(struct drbd_device *device)
 	drbd_flush_peer_acks(resource);
 }
 
+# 2932 "/scrap/drbd/drbd/drbd_main.c"
+# 138 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 3018 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 static void drbd_release(struct gendisk *gd, fmode_t mode)
+# 139 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 2932 "/scrap/drbd/drbd/drbd_main.c"
 {
 	struct drbd_device *device = gd->private_data;
 	struct drbd_resource *resource = device->resource;
@@ -3009,6 +3095,31 @@ static void drbd_release(struct gendisk *gd, fmode_t mode)
 	kref_put(&device->kref, drbd_destroy_device);  /* might destroy the resource as well */
 }
 
+static void drbd_remove_all_paths(struct drbd_connection *connection)
+{
+	struct drbd_resource *resource = connection->resource;
+	struct drbd_transport *transport = &connection->transport;
+	struct drbd_path *path, *tmp;
+
+	lockdep_assert_held(&resource->conf_update);
+
+	list_for_each_entry(path, &transport->paths, list)
+		set_bit(TR_UNREGISTERED, &path->flags);
+
+	/* Ensure flag visible before list manipulation. */
+	smp_wmb();
+
+	list_for_each_entry_safe(path, tmp, &transport->paths, list) {
+		/* Exclusive with reading state, in particular remember_state_change() */
+		write_lock_irq(&resource->state_rwlock);
+		list_del_rcu(&path->list);
+		write_unlock_irq(&resource->state_rwlock);
+
+		notify_path(connection, path, NOTIFY_DESTROY);
+		call_rcu(&path->rcu, drbd_reclaim_path);
+	}
+}
+
 /** __drbd_net_exit is called when a network namespace is removed.
  *
  * For DRBD this means it needs to remove any sockets assigned to that namespace,
@@ -3063,23 +3174,15 @@ static void __net_exit __drbd_net_exit(struct net *net)
 
 	/* Step 3 */
 	list_for_each_entry_safe(connection, n, &connections_wait_list, remove_net_list) {
-		struct drbd_path *path, *tmp;
 		list_del_init(&connection->remove_net_list);
 
 		/* Wait here for StandAlone: a path can only be removed if it's not established */
 		wait_event(connection->resource->state_wait, connection->cstate[NOW] == C_STANDALONE);
 
 		mutex_lock(&connection->resource->adm_mutex);
-		list_for_each_entry_safe(path, tmp, &connection->transport.paths, list) {
-			struct drbd_transport *transport = &connection->transport;
-
-			int err = transport->class->ops.remove_path(path);
-			if (err)
-				drbd_err(connection, "Failed to remove path after disconnect: %d\n", err);
-
-			notify_path(connection, path, NOTIFY_DESTROY);
-			call_rcu(&path->rcu, drbd_reclaim_path);
-		}
+		mutex_lock(&connection->resource->conf_update);
+		drbd_remove_all_paths(connection);
+		mutex_unlock(&connection->resource->conf_update);
 		mutex_unlock(&connection->resource->adm_mutex);
 
 		kref_debug_put(&connection->kref_debug, 16);
@@ -3221,7 +3324,12 @@ static void drbd_device_finalize_work_fn(struct work_struct *work)
 		device->bitmap = NULL;
 	}
 
+# 3239 "/scrap/drbd/drbd/drbd_main.c"
+# 147 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 3330 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 	blk_cleanup_disk(device->vdisk);
+# 148 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 3239 "/scrap/drbd/drbd/drbd_main.c"
 
 	kfree(device);
 
@@ -3656,7 +3764,6 @@ struct drbd_resource *drbd_create_resource(const char *name,
 	INIT_LIST_HEAD(&resource->peer_ack_work.list);
 	resource->peer_ack_work.cb = w_queue_peer_ack;
 	timer_setup(&resource->peer_ack_timer, peer_ack_timer_fn, 0);
-	timer_setup(&resource->repost_up_to_date_timer, repost_up_to_date_fn, 0);
 	sema_init(&resource->state_sem, 1);
 	resource->role[NOW] = R_SECONDARY;
 	resource->max_node_id = res_opts->node_id;
@@ -3679,6 +3786,7 @@ struct drbd_resource *drbd_create_resource(const char *name,
 	drbd_debugfs_resource_add(resource);
 	resource->cached_min_aggreed_protocol_version = drbd_protocol_version_min;
 	resource->members = NODE_MASK(res_opts->node_id);
+	INIT_WORK(&resource->empty_twopc, drbd_empty_twopc_work_fn);
 
 	ratelimit_state_init(&resource->ratelimit[D_RL_R_GENERIC], 5*HZ, 10);
 
@@ -3810,18 +3918,32 @@ fail:
 	return NULL;
 }
 
-/* free the transport specific members (e.g., sockets) of a connection */
+/**
+ * drbd_transport_shutdown() - Free the transport specific members (e.g., sockets) of a connection
+ *
+ * Must be called with conf_update held.
+ */
 void drbd_transport_shutdown(struct drbd_connection *connection, enum drbd_tr_free_op op)
 {
+	struct drbd_transport *transport = &connection->transport;
+
+	lockdep_assert_held(&connection->resource->conf_update);
+
 	mutex_lock(&connection->mutex[DATA_STREAM]);
 	mutex_lock(&connection->mutex[CONTROL_STREAM]);
 
 	flush_send_buffer(connection, DATA_STREAM);
 	flush_send_buffer(connection, CONTROL_STREAM);
 
-	connection->transport.class->ops.free(&connection->transport, op);
-	if (op == DESTROY_TRANSPORT)
-		drbd_put_transport_class(connection->transport.class);
+	/* Holding conf_update ensures that paths list is not modified concurrently. */
+	transport->class->ops.free(transport, op);
+	if (op == DESTROY_TRANSPORT) {
+		drbd_remove_all_paths(connection);
+
+		/* Wait for the delayed drbd_reclaim_path() calls. */
+		rcu_barrier();
+		drbd_put_transport_class(transport->class);
+	}
 
 	mutex_unlock(&connection->mutex[CONTROL_STREAM]);
 	mutex_unlock(&connection->mutex[DATA_STREAM]);
@@ -3832,6 +3954,8 @@ void drbd_destroy_path(struct kref *kref)
 	struct drbd_path *path = container_of(kref, struct drbd_path, kref);
 	struct drbd_connection *connection =
 		container_of(path->transport, struct drbd_connection, transport);
+
+	connection->transport.class->ops.remove_path(path);
 
 	kref_debug_put(&connection->kref_debug, 17);
 	kref_put(&connection->kref, drbd_destroy_connection);
@@ -4197,7 +4321,12 @@ out_no_peer_device:
 out_no_bitmap:
 	__free_page(device->md_io.page);
 out_no_io_page:
+# 4231 "/scrap/drbd/drbd/drbd_main.c"
+# 156 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 4327 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 	blk_cleanup_disk(disk);
+# 157 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 4231 "/scrap/drbd/drbd/drbd_main.c"
 out_no_disk:
 	kref_put(&resource->kref, drbd_destroy_resource);
 	kref_debug_put(&resource->kref_debug, 4);
@@ -4240,7 +4369,12 @@ void drbd_unregister_device(struct drbd_device *device)
 	device->submit_conflict.wq = NULL;
 	destroy_workqueue(device->submit.wq);
 	device->submit.wq = NULL;
+# 4274 "/scrap/drbd/drbd/drbd_main.c"
+# 165 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 4375 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 	del_timer_sync(&device->request_timer);
+# 166 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 4274 "/scrap/drbd/drbd/drbd_main.c"
 }
 
 void drbd_reclaim_device(struct rcu_head *rp)
@@ -4262,7 +4396,12 @@ void drbd_reclaim_device(struct rcu_head *rp)
 
 static void shutdown_connect_timer(struct drbd_connection *connection)
 {
+# 4296 "/scrap/drbd/drbd/drbd_main.c"
+# 174 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 4402 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_main.c"
 	if (del_timer_sync(&connection->connect_timer)) {
+# 175 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_main.c.patch"
+# 4296 "/scrap/drbd/drbd/drbd_main.c"
 		kref_debug_put(&connection->kref_debug, 11);
 		kref_put(&connection->kref, drbd_destroy_connection);
 	}
@@ -4376,6 +4515,7 @@ static int __init drbd_init(void)
 		goto fail;
 	}
 
+	drbd_enable_netns();
 	err = drbd_genl_register();
 	if (err) {
 		pr_err("unable to register generic netlink family\n");
