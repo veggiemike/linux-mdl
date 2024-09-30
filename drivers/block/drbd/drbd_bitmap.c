@@ -1175,15 +1175,15 @@ static void bm_page_io_async(struct drbd_bm_aio_ctx *ctx, int page_nr) __must_ho
 	struct page *page;
 	sector_t last_bm_sect;
 	sector_t first_bm_sect;
-# 5 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
+# 5 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_bitmap.c.patch"
 # 1177 "/scrap/drbd/drbd/drbd_bitmap.c"
 	sector_t on_disk_sector;
 	unsigned int len;
 # 1180 "/scrap/drbd/drbd/drbd_bitmap.c"
-# 8 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
-# 1183 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_bitmap.c"
+# 8 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_bitmap.c.patch"
+# 1183 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_bitmap.c"
 	unsigned int op = ctx->flags & BM_AIO_READ ? REQ_OP_READ : REQ_OP_WRITE;
-# 9 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
+# 9 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_bitmap.c.patch"
 # 1180 "/scrap/drbd/drbd/drbd_bitmap.c"
 
 	first_bm_sect = device->ldev->md.md_offset + device->ldev->md.bm_offset;
@@ -1229,21 +1229,21 @@ static void bm_page_io_async(struct drbd_bm_aio_ctx *ctx, int page_nr) __must_ho
 		page = b->bm_pages[page_nr];
 
 # 1225 "/scrap/drbd/drbd/drbd_bitmap.c"
-# 18 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
-# 1234 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_bitmap.c"
+# 18 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_bitmap.c.patch"
+# 1234 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_bitmap.c"
 	bio = bio_alloc_bioset(GFP_NOIO, 1, &drbd_md_io_bio_set);
 	bio_set_dev(bio, device->ldev->md_bdev);
-# 20 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
+# 20 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_bitmap.c.patch"
 # 1225 "/scrap/drbd/drbd/drbd_bitmap.c"
 	bio->bi_iter.bi_sector = on_disk_sector;
 	__bio_add_page(bio, page, len, 0);
 	bio->bi_private = ctx;
 	bio->bi_end_io = drbd_bm_endio;
 # 1229 "/scrap/drbd/drbd/drbd_bitmap.c"
-# 24 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
-# 1243 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_bitmap.c"
+# 24 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_bitmap.c.patch"
+# 1243 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_bitmap.c"
 	bio->bi_opf = op;
-# 25 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_bitmap.c.patch"
+# 25 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_bitmap.c.patch"
 # 1229 "/scrap/drbd/drbd/drbd_bitmap.c"
 
 	if (drbd_insert_fault(device, (op == REQ_OP_WRITE) ? DRBD_FAULT_MD_WR : DRBD_FAULT_MD_RD)) {
@@ -1339,7 +1339,8 @@ static int bm_rw_range(struct drbd_device *device,
 
 	now = jiffies;
 
-	/* let the layers below us try to merge these bios... */
+	blk_start_plug(&ctx->bm_aio_plug);
+	/* implicit unplug if scheduled for whatever reason */
 
 	if (flags & BM_AIO_READ) {
 		for (i = start_page; i <= end_page; i++) {
@@ -1388,6 +1389,8 @@ static int bm_rw_range(struct drbd_device *device,
 			cond_resched();
 		}
 	}
+	/* explicit unplug, we are done submitting */
+	blk_finish_plug(&ctx->bm_aio_plug);
 
 	/*
 	 * We initialize ctx->in_flight to one to make sure drbd_bm_endio
@@ -1402,8 +1405,8 @@ static int bm_rw_range(struct drbd_device *device,
 	} else
 		kref_put(&ctx->kref, &drbd_bm_aio_ctx_destroy);
 
-	/* summary for global bitmap IO */
-	if (flags == 0 && count) {
+	/* summary stats for global bitmap IO */
+	if ((flags & BM_AIO_NO_STATS) == 0 && count) {
 		unsigned int ms = jiffies_to_msecs(jiffies - now);
 		if (ms > 5) {
 			drbd_info(device, "bitmap %s of %u pages took %u ms\n",
@@ -1422,10 +1425,13 @@ static int bm_rw_range(struct drbd_device *device,
 		err = -EIO; /* Disk timeout/force-detach during IO... */
 
 	if (flags & BM_AIO_READ) {
+		unsigned int ms;
 		now = jiffies;
 		bm_count_bits(device);
-		drbd_info(device, "recounting of set bits took additional %ums\n",
-		     jiffies_to_msecs(jiffies - now));
+		ms = jiffies_to_msecs(jiffies - now);
+		/* If we can count quickly, there is no need to report this either */
+		if (ms > 3)
+			drbd_info(device, "recounting of set bits took additional %ums\n", ms);
 	}
 
 	kref_put(&ctx->kref, &drbd_bm_aio_ctx_destroy);

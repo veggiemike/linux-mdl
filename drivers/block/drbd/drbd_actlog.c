@@ -31,12 +31,16 @@ void *drbd_md_get_buffer(struct drbd_device *device, const char *intent)
 			device->disk_state[NOW] <= D_FAILED,
 			HZ * 10);
 
-	if (t == 0)
-		drbd_err(device, "Waited 10 Seconds for md_buffer! BUG?\n");
-
 	if (r) {
-		drbd_err(device, "Failed to get md_buffer for %s, currently in use by %s\n",
-			 intent, device->md_io.current_use);
+		if (t == 0) {
+			drbd_err(device, "Waited 10 Seconds for md_buffer! BUG?\n");
+			drbd_err(device, "Failed to get md_buffer for %s, currently in use by %s\n",
+				 intent, device->md_io.current_use);
+		} else {
+			drbd_err(device, "Failed to get md_buffer for %s: disk state %s\n",
+				 intent, drbd_disk_str(device->disk_state[NOW]));
+		}
+
 		return NULL;
 	}
 
@@ -65,34 +69,38 @@ void wait_until_done_or_force_detached(struct drbd_device *device, struct drbd_b
 		dt = MAX_SCHEDULE_TIMEOUT;
 
 	dt = wait_event_timeout(device->misc_wait,
-			*done || test_bit(FORCE_DETACH, &device->flags), dt);
+			*done ||
+			test_bit(FORCE_DETACH, &device->flags) ||
+			test_bit(ABORT_MDIO, &device->flags),
+			dt);
+
 	if (dt == 0) {
 		drbd_err(device, "meta-data IO operation timed out\n");
 		drbd_handle_io_error(device, DRBD_FORCE_DETACH);
 	}
 }
 
-# 5 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_actlog.c.patch"
-# 74 "/scrap/drbd/drbd/drbd_actlog.c"
+# 5 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 82 "/scrap/drbd/drbd/drbd_actlog.c"
 static int _drbd_md_sync_page_io(struct drbd_device *device,
 				 struct drbd_backing_dev *bdev,
-# 77 "/scrap/drbd/drbd/drbd_actlog.c"
-# 8 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_actlog.c.patch"
-# 80 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_actlog.c"
+# 85 "/scrap/drbd/drbd/drbd_actlog.c"
+# 8 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 88 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_actlog.c"
 				 sector_t sector, unsigned int op)
-# 9 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_actlog.c.patch"
-# 77 "/scrap/drbd/drbd/drbd_actlog.c"
+# 9 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 85 "/scrap/drbd/drbd/drbd_actlog.c"
 {
 	struct bio *bio;
 	/* we do all our meta data IO in aligned 4k blocks. */
 	const int size = 4096;
 	int err;
-# 83 "/scrap/drbd/drbd/drbd_actlog.c"
-# 15 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_actlog.c.patch"
-# 89 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_actlog.c"
+# 91 "/scrap/drbd/drbd/drbd_actlog.c"
+# 15 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 97 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_actlog.c"
 	unsigned int op_flags = 0;
-# 16 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_actlog.c.patch"
-# 83 "/scrap/drbd/drbd/drbd_actlog.c"
+# 16 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 91 "/scrap/drbd/drbd/drbd_actlog.c"
 
 	if ((op == REQ_OP_WRITE) && !test_bit(MD_NO_FUA, &device->flags))
 		op_flags |= REQ_FUA | REQ_PREFLUSH;
@@ -101,25 +109,25 @@ static int _drbd_md_sync_page_io(struct drbd_device *device,
 	device->md_io.done = 0;
 	device->md_io.error = -ENODEV;
 
-# 93 "/scrap/drbd/drbd/drbd_actlog.c"
-# 25 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_actlog.c.patch"
-# 107 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_actlog.c"
+# 101 "/scrap/drbd/drbd/drbd_actlog.c"
+# 25 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 115 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_actlog.c"
 	bio = bio_alloc_bioset(GFP_NOIO, 1, &drbd_md_io_bio_set);
 	bio_set_dev(bio, bdev->md_bdev);
-# 27 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_actlog.c.patch"
-# 93 "/scrap/drbd/drbd/drbd_actlog.c"
+# 27 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 101 "/scrap/drbd/drbd/drbd_actlog.c"
 	bio->bi_iter.bi_sector = sector;
 	err = -EIO;
 	if (bio_add_page(bio, device->md_io.page, size, 0) != size)
 		goto out;
 	bio->bi_private = device;
 	bio->bi_end_io = drbd_md_endio;
-# 99 "/scrap/drbd/drbd/drbd_actlog.c"
-# 33 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_actlog.c.patch"
-# 118 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_actlog.c"
+# 107 "/scrap/drbd/drbd/drbd_actlog.c"
+# 33 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 126 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_actlog.c"
 	bio->bi_opf = op | op_flags;
-# 34 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_actlog.c.patch"
-# 99 "/scrap/drbd/drbd/drbd_actlog.c"
+# 34 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 107 "/scrap/drbd/drbd/drbd_actlog.c"
 
 	if (op != REQ_OP_WRITE && device->disk_state[NOW] == D_DISKLESS && device->ldev == NULL)
 		/* special case, drbd_md_read() during drbd_adm_attach(): no get_ldev */
@@ -148,12 +156,12 @@ static int _drbd_md_sync_page_io(struct drbd_device *device,
 }
 
 int drbd_md_sync_page_io(struct drbd_device *device, struct drbd_backing_dev *bdev,
-# 128 "/scrap/drbd/drbd/drbd_actlog.c"
-# 42 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_actlog.c.patch"
-# 154 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_actlog.c"
+# 136 "/scrap/drbd/drbd/drbd_actlog.c"
+# 42 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 162 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_actlog.c"
 			 sector_t sector, unsigned int op)
-# 43 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_actlog.c.patch"
-# 128 "/scrap/drbd/drbd/drbd_actlog.c"
+# 43 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 136 "/scrap/drbd/drbd/drbd_actlog.c"
 {
 	int err;
 	D_ASSERT(device, atomic_read(&device->md_io.in_use) == 1);
@@ -745,7 +753,7 @@ static int update_sync_bits(struct drbd_peer_device *peer_device,
 
 /* clear the bit corresponding to the piece of storage in question:
  * size byte of data starting from sector.  Only clear a bits of the affected
- * one ore more _aligned_ BM_BLOCK_SIZE blocks.
+ * one or more _aligned_ BM_BLOCK_SIZE blocks.
  *
  * called by worker on L_SYNC_TARGET and receiver on SyncSource.
  *

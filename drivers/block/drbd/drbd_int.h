@@ -442,15 +442,15 @@ struct drbd_peer_request {
 			unsigned int requested_size;
 		};
 	};
-# 5 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_int.h.patch"
+# 5 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_int.h.patch"
 # 444 "/scrap/drbd/drbd/drbd_int.h"
 
 	struct drbd_page_chain_head page_chain;
 # 447 "/scrap/drbd/drbd/drbd_int.h"
-# 8 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_int.h.patch"
-# 450 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_int.h"
+# 8 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_int.h.patch"
+# 450 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_int.h"
 	unsigned int opf; /* to be used as bi_opf */
-# 9 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_int.h.patch"
+# 9 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_int.h.patch"
 # 447 "/scrap/drbd/drbd/drbd_int.h"
 	atomic_t pending_bios;
 	struct drbd_interval i;
@@ -561,6 +561,7 @@ enum device_flag {
 	MD_NO_FUA,		/* meta data device does not support barriers,
 				   so don't even try */
 	FORCE_DETACH,		/* Force-detach from local disk, aborting any pending local IO */
+	ABORT_MDIO,		/* Interrupt ongoing meta-data I/O */
 	NEW_CUR_UUID,		/* Create new current UUID when thawing IO or issuing local IO */
 	__NEW_CUR_UUID,		/* Set NEW_CUR_UUID as soon as state change visible */
 	WRITING_NEW_CUR_UUID,	/* Set while the new current ID gets generated. */
@@ -744,11 +745,11 @@ struct drbd_md {
 
 struct drbd_backing_dev {
 	struct block_device *backing_bdev;
-# 17 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_int.h.patch"
-# 740 "/scrap/drbd/drbd/drbd_int.h"
+# 17 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_int.h.patch"
+# 741 "/scrap/drbd/drbd/drbd_int.h"
 	struct block_device *md_bdev;
-# 19 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_int.h.patch"
-# 742 "/scrap/drbd/drbd/drbd_int.h"
+# 19 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_int.h.patch"
+# 743 "/scrap/drbd/drbd/drbd_int.h"
 	struct drbd_md md;
 	struct disk_conf __rcu *disk_conf; /* RCU, for updates: resource->conf_update */
 	sector_t known_size; /* last known size of that backing device */
@@ -825,6 +826,7 @@ enum resource_flag {
 				 * pending, from drbd worker context.
 				 */
 	TWOPC_ABORT_LOCAL,
+	TWOPC_WORK_PENDING,     /* Set while work for sending reply is scheduled */
 	TWOPC_EXECUTED,         /* Commited or aborted */
 	TWOPC_STATE_CHANGE_PENDING, /* set between sending commit and changing local state */
 
@@ -979,7 +981,7 @@ struct drbd_resource {
 	u64 twopc_parent_nodes;
 	struct twopc_reply twopc_reply;
 	struct timer_list twopc_timer;
-	struct drbd_work twopc_work;
+	struct work_struct twopc_work;
 	wait_queue_head_t twopc_wait;
 	struct {
 		enum twopc_type type;
@@ -1613,6 +1615,7 @@ struct drbd_bm_aio_ctx {
 	struct drbd_device *device;
 	struct list_head list; /* on device->pending_bitmap_io */
 	unsigned long start_jif;
+	struct blk_plug bm_aio_plug;
 	atomic_t in_flight;
 	unsigned int done;
 	unsigned flags;
@@ -1621,6 +1624,10 @@ struct drbd_bm_aio_ctx {
 #define BM_AIO_WRITE_ALL_PAGES	4
 #define BM_AIO_READ	        8
 #define BM_AIO_WRITE_LAZY      16
+	/* only report stats for global read, write, write all */
+#define BM_AIO_NO_STATS (BM_AIO_COPY_PAGES\
+			|BM_AIO_WRITE_HINTED\
+			|BM_AIO_WRITE_LAZY)
 	int error;
 	struct kref kref;
 };
@@ -2044,12 +2051,12 @@ extern void do_submit(struct work_struct *ws);
 #define __drbd_make_request(d,b,k,j) __drbd_make_request(d,b,j)
 #endif
 extern void __drbd_make_request(struct drbd_device *, struct bio *, ktime_t, unsigned long);
-# 2038 "/scrap/drbd/drbd/drbd_int.h"
-# 27 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_int.h.patch"
-# 2050 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_int.h"
+# 2045 "/scrap/drbd/drbd/drbd_int.h"
+# 27 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_int.h.patch"
+# 2057 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_int.h"
 extern blk_qc_t drbd_submit_bio(struct bio *bio);
-# 28 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_int.h.patch"
-# 2038 "/scrap/drbd/drbd/drbd_int.h"
+# 28 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_int.h.patch"
+# 2045 "/scrap/drbd/drbd/drbd_int.h"
 
 enum drbd_force_detach_flags {
 	DRBD_READ_ERROR,
@@ -2119,13 +2126,13 @@ extern void verify_progress(struct drbd_peer_device *peer_device,
 extern void *drbd_md_get_buffer(struct drbd_device *device, const char *intent);
 extern void drbd_md_put_buffer(struct drbd_device *device);
 extern int drbd_md_sync_page_io(struct drbd_device *device,
-# 2108 "/scrap/drbd/drbd/drbd_int.h"
-# 36 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_int.h.patch"
-# 2125 "/scrap/drbd/drbd/build-5.15.160-mdl+/drbd_int.h"
+# 2115 "/scrap/drbd/drbd/drbd_int.h"
+# 36 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_int.h.patch"
+# 2132 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_int.h"
 		struct drbd_backing_dev *bdev, sector_t sector,
 		unsigned int op);
-# 38 "/scrap/drbd/drbd/build-5.15.160-mdl+/.patches/drbd_int.h.patch"
-# 2108 "/scrap/drbd/drbd/drbd_int.h"
+# 38 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_int.h.patch"
+# 2115 "/scrap/drbd/drbd/drbd_int.h"
 extern bool drbd_al_active(struct drbd_device *device, sector_t sector, unsigned int size);
 extern void drbd_ov_out_of_sync_found(struct drbd_peer_device *, sector_t, int);
 extern void wait_until_done_or_force_detached(struct drbd_device *device,
@@ -2262,6 +2269,9 @@ extern int drbd_connected(struct drbd_peer_device *);
 extern void conn_connect2(struct drbd_connection *);
 extern void wait_initial_states_received(struct drbd_connection *);
 extern void abort_connect(struct drbd_connection *);
+extern void drbd_print_cluster_wide_state_change(struct drbd_resource *resource,
+		const char *message, unsigned int tid, unsigned int initiator_node_id,
+		int target_node_id, union drbd_state mask, union drbd_state val);
 extern void apply_unacked_peer_requests(struct drbd_connection *connection);
 extern struct drbd_connection *drbd_connection_by_node_id(struct drbd_resource *, int);
 extern struct drbd_connection *drbd_get_connection_by_node_id(struct drbd_resource *, int);
@@ -2366,6 +2376,7 @@ extern void drbd_broadcast_peer_device_state(struct drbd_peer_device *);
 extern sector_t drbd_local_max_size(struct drbd_device *device) __must_hold(local);
 extern int drbd_open_ro_count(struct drbd_resource *resource);
 
+extern void device_to_info(struct device_info *info, struct drbd_device *device);
 extern void device_state_change_to_info(struct device_info *,
 					struct drbd_device_state_change *);
 extern void peer_device_state_change_to_info(struct peer_device_info *,
@@ -2491,6 +2502,7 @@ drbd_peer_device_post_work(struct drbd_peer_device *peer_device, int work_bit)
 }
 
 extern void drbd_flush_workqueue(struct drbd_work_queue *work_queue);
+extern void drbd_flush_workqueue_interruptible(struct drbd_device *device);
 
 extern void *__conn_prepare_command(struct drbd_connection *, int, enum drbd_stream);
 extern void *conn_prepare_command(struct drbd_connection *, int, enum drbd_stream);
