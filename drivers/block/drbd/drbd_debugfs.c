@@ -617,7 +617,8 @@ static int resource_state_twopc_show(struct seq_file *m, void *pos)
 				seq_printf(m, "%s ret, ", name);
 			else if (test_bit(TWOPC_YES, &connection->flags))
 				seq_printf(m, "%s yes, ", name);
-			else seq_printf(m, "%s ___, ", name);
+			else
+				seq_printf(m, "%s ___, ", name);
 		}
 		rcu_read_unlock();
 		seq_puts(m, "\n");
@@ -901,7 +902,7 @@ static int connection_debug_show(struct seq_file *m, void *ignored)
 	seq_printf(m, "flags: 0x%04lx :", flags);
 #define pretty_print_bit(n) \
 	seq_print_rq_state_bit(m, test_bit(n, &flags), &sep, #n);
-	pretty_print_bit(GOT_PING_ACK);
+	pretty_print_bit(PING_PENDING);
 	pretty_print_bit(TWOPC_PREPARED);
 	pretty_print_bit(TWOPC_YES);
 	pretty_print_bit(TWOPC_NO);
@@ -1296,11 +1297,12 @@ static int device_ed_gen_id_show(struct seq_file *m, void *ignored)
 	return 0;
 }
 
-#define show_per_peer(M)						\
-	seq_printf(m, "%-16s", #M ":");					\
-	for_each_peer_device(peer_device, device)			\
-		seq_printf(m, " %12lld", ktime_to_ns(peer_device->M)); \
-	seq_printf(m, "\n")
+#define show_per_peer(M) do {							\
+		seq_printf(m, "%-16s", #M ":");					\
+		for_each_peer_device(peer_device, device)			\
+			seq_printf(m, " %12lld", ktime_to_ns(peer_device->M));	\
+		seq_printf(m, "\n");						\
+	} while (0);
 
 #define PRId64 "lld"
 
@@ -1893,24 +1895,26 @@ static const struct file_operations drbd_refcounts_fops = {
 	.release = single_release,
 };
 
-# 5 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_debugfs.c.patch"
-# 1895 "/scrap/drbd/drbd/drbd_debugfs.c"
+# 5 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_debugfs.c.patch"
+# 1897 "/scrap/drbd/drbd/drbd_debugfs.c"
 static int drbd_compat_show(struct seq_file *m, void *ignored)
 {
-# 1897 "/scrap/drbd/drbd/drbd_debugfs.c"
-# 7 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_debugfs.c.patch"
-# 1901 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_debugfs.c"
+# 1899 "/scrap/drbd/drbd/drbd_debugfs.c"
+# 7 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_debugfs.c.patch"
+# 1905 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_debugfs.c"
 	seq_puts(m, "bio_split_to_limits__no_present\n");
 	seq_puts(m, "bio_alloc__no_has_4_params\n");
 	seq_puts(m, "bio_alloc_clone__no_present\n");
 	seq_puts(m, "sendpage__yes_present\n");
 	seq_puts(m, "blk_cleanup_disk__yes_present\n");
+	seq_puts(m, "queue_limits_features__no_present\n");
 	seq_puts(m, "blk_alloc_disk__no_takes_queue_limits\n");
 	seq_puts(m, "submit_bio__no_returns_void\n");
 	seq_puts(m, "queue_flag_discard__yes_present\n");
 	seq_puts(m, "blk_opf_t__no_present\n");
 	seq_puts(m, "enum_req_op__no_present\n");
 	seq_puts(m, "bdi_congested__yes_present\n");
+	seq_puts(m, "queue_limits_start_update__no_present\n");
 	seq_puts(m, "fs_dax_get_by_bdev__no_takes_start_off_and_holder\n");
 	seq_puts(m, "fs_dax_get_by_bdev__no_takes_start_off\n");
 	seq_puts(m, "dax_direct_access__no_takes_mode\n");
@@ -1923,18 +1927,20 @@ static int drbd_compat_show(struct seq_file *m, void *ignored)
 	seq_puts(m, "get_random_u32__no_present\n");
 	seq_puts(m, "sk_use_task_frag__no_present\n");
 	seq_puts(m, "timer_shutdown__no_present\n");
+	seq_puts(m, "blk_mode_t__no_present\n");
 	seq_puts(m, "bdev_file_open_by_path__no_present\n");
 	seq_puts(m, "bdev_open_by_path__no_present\n");
+	seq_puts(m, "blkdev_put__no_has_holder\n");
 	seq_puts(m, "blkdev_get_by_path__no_has_holder_ops\n");
 	seq_puts(m, "block_device_operations_open__no_takes_gendisk\n");
 	seq_puts(m,
 		 "block_device_operations_release__no_takes_single_argument\n");
-	seq_puts(m, "blk_mode_t__no_present\n");
-	seq_puts(m, "blkdev_put__no_has_holder\n");
 	seq_puts(m, "genl_info_userhdr__no_present\n");
 	seq_puts(m, "tls_get_record_type__no_present\n");
-# 40 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_debugfs.c.patch"
-# 1897 "/scrap/drbd/drbd/drbd_debugfs.c"
+	seq_puts(m, "counted_by__no_present\n");
+	seq_puts(m, "linux_unaligned_h__no_present\n");
+# 44 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_debugfs.c.patch"
+# 1899 "/scrap/drbd/drbd/drbd_debugfs.c"
 	return 0;
 }
 

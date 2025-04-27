@@ -55,8 +55,8 @@ static struct drbd_request *drbd_req_new(struct drbd_device *device, struct bio 
 	spin_lock_init(&req->rq_lock);
 
 	req->local_rq_state = (bio_data_dir(bio_src) == WRITE ? RQ_WRITE : 0)
-	              | (bio_op(bio_src) == REQ_OP_WRITE_ZEROES ? RQ_ZEROES : 0)
-	              | (bio_op(bio_src) == REQ_OP_DISCARD ? RQ_UNMAP : 0);
+			      | (bio_op(bio_src) == REQ_OP_WRITE_ZEROES ? RQ_ZEROES : 0)
+			      | (bio_op(bio_src) == REQ_OP_DISCARD ? RQ_UNMAP : 0);
 
 	return req;
 }
@@ -372,7 +372,8 @@ void drbd_req_destroy(struct kref *kref)
 	}
 }
 
-static void wake_all_senders(struct drbd_resource *resource) {
+static void wake_all_senders(struct drbd_resource *resource)
+{
 	struct drbd_connection *connection;
 	/* We need make sure any update is visible before we wake up the
 	 * threads that may check the values in their wait_event() condition.
@@ -489,20 +490,20 @@ void drbd_release_conflicts(struct drbd_device *device, struct drbd_interval *re
 		 * remain. The conflict submitter will only actually submit the
 		 * request if there are no conflicts. */
 		switch (i->type) {
-			case INTERVAL_LOCAL_WRITE:
-				queue_conflicting_write(submit_conflict, i);
-				break;
-			case INTERVAL_PEER_WRITE:
-				queue_conflicting_peer_write(submit_conflict, i);
-				break;
-			case INTERVAL_RESYNC_WRITE:
-				queue_conflicting_resync_write(submit_conflict, i);
-				break;
-			case INTERVAL_RESYNC_READ:
-				queue_conflicting_resync_read(submit_conflict, i);
-				break;
-			default:
-				BUG();
+		case INTERVAL_LOCAL_WRITE:
+			queue_conflicting_write(submit_conflict, i);
+			break;
+		case INTERVAL_PEER_WRITE:
+			queue_conflicting_peer_write(submit_conflict, i);
+			break;
+		case INTERVAL_RESYNC_WRITE:
+			queue_conflicting_resync_write(submit_conflict, i);
+			break;
+		case INTERVAL_RESYNC_READ:
+			queue_conflicting_resync_read(submit_conflict, i);
+			break;
+		default:
+			BUG();
 		}
 		spin_unlock(&submit_conflict->lock);
 
@@ -750,6 +751,7 @@ static void advance_conn_req_next(struct drbd_connection *connection, struct drb
 
 /**
  * set_cache_ptr_if_null() - Set caching pointer to given request if not currently set.
+ * @connection: DRBD connection to operate on.
  * @cache_ptr: Pointer to set.
  * @req: Request to potentially set the pointer to.
  *
@@ -1403,16 +1405,16 @@ static bool remote_due_to_read_balancing(struct drbd_device *device,
 	switch (rbm) {
 	case RB_CONGESTED_REMOTE:
 		/* originally, this used the bdi congestion framework,
-# 5 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 1405 "/scrap/drbd/drbd/drbd_req.c"
+# 5 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 1407 "/scrap/drbd/drbd/drbd_req.c"
 		 * but that was removed in linux 5.18.
 		 * so just never report the lower device as congested. */
-# 1408 "/scrap/drbd/drbd/drbd_req.c"
-# 8 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 1411 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_req.c"
+# 1410 "/scrap/drbd/drbd/drbd_req.c"
+# 8 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 1415 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_req.c"
 		return bdi_read_congested(device->ldev->backing_bdev->bd_disk->bdi);
-# 9 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 1408 "/scrap/drbd/drbd/drbd_req.c"
+# 9 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 1410 "/scrap/drbd/drbd/drbd_req.c"
 	case RB_LEAST_PENDING:
 		return atomic_read(&device->local_cnt) >
 			atomic_read(&peer_device->ap_pending_cnt) + atomic_read(&peer_device->rs_pending_cnt);
@@ -1784,7 +1786,7 @@ static void drbd_req_in_actlog(struct drbd_request *req)
  * Returns ERR_PTR(-ENOMEM) if we cannot allocate a drbd_request.
  */
 #ifndef CONFIG_DRBD_TIMING_STATS
-#define drbd_request_prepare(d,b,k,j) drbd_request_prepare(d,b,j)
+#define drbd_request_prepare(d, b, k, j) drbd_request_prepare(d, b, j)
 #endif
 static struct drbd_request *
 drbd_request_prepare(struct drbd_device *device, struct bio *bio,
@@ -1805,13 +1807,13 @@ drbd_request_prepare(struct drbd_device *device, struct bio *bio,
 	req->start_jif = bio_start_io_acct(req->master_bio);
 
 	if (get_ldev(device)) {
-# 1801 "/scrap/drbd/drbd/drbd_req.c"
-# 17 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 1811 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_req.c"
+# 1803 "/scrap/drbd/drbd/drbd_req.c"
+# 17 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 1813 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_req.c"
 		req->private_bio = bio_clone_fast(bio, GFP_NOIO,
 						  &drbd_io_bio_set);
-# 19 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 1801 "/scrap/drbd/drbd/drbd_req.c"
+# 19 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 1803 "/scrap/drbd/drbd/drbd_req.c"
 		if (!req->private_bio) {
 			drbd_err(device, "could not bio_alloc_clone() req->private_bio\n");
 			kfree(req);
@@ -2328,14 +2330,14 @@ static void submit_fast_path(struct drbd_device *device, struct waiting_for_act_
 static struct drbd_request *wfa_next_request(struct waiting_for_act_log *wfa)
 {
 	struct list_head *lh = !list_empty(&wfa->requests.more_incoming) ?
-			&wfa->requests.more_incoming: &wfa->requests.incoming;
+			&wfa->requests.more_incoming : &wfa->requests.incoming;
 	return list_first_entry_or_null(lh, struct drbd_request, list);
 }
 
 static struct drbd_peer_request *wfa_next_peer_request(struct waiting_for_act_log *wfa)
 {
 	struct list_head *lh = !list_empty(&wfa->peer_requests.more_incoming) ?
-			&wfa->peer_requests.more_incoming: &wfa->peer_requests.incoming;
+			&wfa->peer_requests.more_incoming : &wfa->peer_requests.incoming;
 	return list_first_entry_or_null(lh, struct drbd_peer_request, w.list);
 }
 
@@ -2610,12 +2612,12 @@ static bool request_size_bad(struct drbd_device *device, struct bio *bio)
  *                                           v
  *                                   Request state machine
  */
-# 2600 "/scrap/drbd/drbd/drbd_req.c"
-# 27 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2616 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_req.c"
+# 2602 "/scrap/drbd/drbd/drbd_req.c"
+# 27 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2618 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_req.c"
 blk_qc_t drbd_submit_bio(struct bio *bio)
-# 28 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2600 "/scrap/drbd/drbd/drbd_req.c"
+# 28 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2602 "/scrap/drbd/drbd/drbd_req.c"
 {
 	struct drbd_device *device = bio->bi_bdev->bd_disk->private_data;
 #ifdef CONFIG_DRBD_TIMING_STATS
@@ -2626,30 +2628,30 @@ blk_qc_t drbd_submit_bio(struct bio *bio)
 	if (drbd_reject_write_early(device, bio)) {
 		bio->bi_status = BLK_STS_IOERR;
 		bio_endio(bio);
-# 2611 "/scrap/drbd/drbd/drbd_req.c"
-# 36 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2632 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_req.c"
+# 2613 "/scrap/drbd/drbd/drbd_req.c"
+# 36 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2634 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_req.c"
 		return BLK_QC_T_NONE;
-# 37 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2611 "/scrap/drbd/drbd/drbd_req.c"
+# 37 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2613 "/scrap/drbd/drbd/drbd_req.c"
 	}
 
-# 2616 "/scrap/drbd/drbd/drbd_req.c"
-# 42 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2638 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_req.c"
+# 2618 "/scrap/drbd/drbd/drbd_req.c"
+# 42 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2642 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_req.c"
 	blk_queue_split(&bio);
-# 43 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2616 "/scrap/drbd/drbd/drbd_req.c"
+# 43 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2618 "/scrap/drbd/drbd/drbd_req.c"
 
 	if (device->cached_err_io || request_size_bad(device, bio)) {
 		bio->bi_status = BLK_STS_IOERR;
 		bio_endio(bio);
-# 2621 "/scrap/drbd/drbd/drbd_req.c"
-# 48 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2646 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_req.c"
+# 2623 "/scrap/drbd/drbd/drbd_req.c"
+# 48 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2652 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_req.c"
 		return BLK_QC_T_NONE;
-# 49 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2621 "/scrap/drbd/drbd/drbd_req.c"
+# 49 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2623 "/scrap/drbd/drbd/drbd_req.c"
 	}
 
 	/* This is both an optimization: READ of size 0, nothing to do
@@ -2661,24 +2663,24 @@ blk_qc_t drbd_submit_bio(struct bio *bio)
 	if (bio_op(bio) == REQ_OP_READ && bio->bi_iter.bi_size == 0) {
 		WARN_ONCE(1, "size zero read from upper layers");
 		bio_endio(bio);
-# 2633 "/scrap/drbd/drbd/drbd_req.c"
-# 57 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2667 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_req.c"
+# 2635 "/scrap/drbd/drbd/drbd_req.c"
+# 57 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2669 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_req.c"
 		return BLK_QC_T_NONE;
-# 58 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2633 "/scrap/drbd/drbd/drbd_req.c"
+# 58 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2635 "/scrap/drbd/drbd/drbd_req.c"
 	}
 
 	ktime_get_accounting(start_kt);
 	start_jif = jiffies;
 
 	__drbd_make_request(device, bio, start_kt, start_jif);
-# 2639 "/scrap/drbd/drbd/drbd_req.c"
-# 64 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2677 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_req.c"
+# 2641 "/scrap/drbd/drbd/drbd_req.c"
+# 64 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2681 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_req.c"
 	return BLK_QC_T_NONE;
-# 65 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_req.c.patch"
-# 2639 "/scrap/drbd/drbd/drbd_req.c"
+# 65 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_req.c.patch"
+# 2641 "/scrap/drbd/drbd/drbd_req.c"
 }
 
 static unsigned long time_min_in_future(unsigned long now,
@@ -2812,8 +2814,8 @@ void request_timer_fn(struct timer_list *t)
 			read_pre_submit_jif = req_read->pre_submit_jif;
 		oldest_submit_jif =
 			(req_write && req_read)
-			? ( time_before(write_pre_submit_jif, read_pre_submit_jif)
-			  ? write_pre_submit_jif : read_pre_submit_jif )
+			? (time_before(write_pre_submit_jif, read_pre_submit_jif)
+			  ? write_pre_submit_jif : read_pre_submit_jif)
 			: req_write ? write_pre_submit_jif
 			: req_read ? read_pre_submit_jif : now;
 
@@ -2857,7 +2859,7 @@ void request_timer_fn(struct timer_list *t)
 		/* maybe the oldest request waiting for the peer is in fact still
 		 * blocking in tcp sendmsg.  That's ok, though, that's handled via the
 		 * socket send timeout, requesting a ping, and bumping ko-count in
-		 * we_should_drop_the_connection().
+		 * drbd_stream_send_timed_out().
 		 */
 
 		/* check the oldest request we did successfully sent,

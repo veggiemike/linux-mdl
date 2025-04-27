@@ -80,15 +80,15 @@ void wait_until_done_or_force_detached(struct drbd_device *device, struct drbd_b
 	}
 }
 
-# 5 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 5 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_actlog.c.patch"
 # 82 "/scrap/drbd/drbd/drbd_actlog.c"
 static int _drbd_md_sync_page_io(struct drbd_device *device,
 				 struct drbd_backing_dev *bdev,
 # 85 "/scrap/drbd/drbd/drbd_actlog.c"
-# 8 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
-# 88 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_actlog.c"
+# 8 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_actlog.c.patch"
+# 90 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_actlog.c"
 				 sector_t sector, unsigned int op)
-# 9 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 9 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_actlog.c.patch"
 # 85 "/scrap/drbd/drbd/drbd_actlog.c"
 {
 	struct bio *bio;
@@ -96,10 +96,10 @@ static int _drbd_md_sync_page_io(struct drbd_device *device,
 	const int size = 4096;
 	int err;
 # 91 "/scrap/drbd/drbd/drbd_actlog.c"
-# 15 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
-# 97 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_actlog.c"
+# 15 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_actlog.c.patch"
+# 101 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_actlog.c"
 	unsigned int op_flags = 0;
-# 16 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 16 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_actlog.c.patch"
 # 91 "/scrap/drbd/drbd/drbd_actlog.c"
 
 	if ((op == REQ_OP_WRITE) && !test_bit(MD_NO_FUA, &device->flags))
@@ -110,11 +110,11 @@ static int _drbd_md_sync_page_io(struct drbd_device *device,
 	device->md_io.error = -ENODEV;
 
 # 101 "/scrap/drbd/drbd/drbd_actlog.c"
-# 25 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
-# 115 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_actlog.c"
+# 25 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_actlog.c.patch"
+# 115 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_actlog.c"
 	bio = bio_alloc_bioset(GFP_NOIO, 1, &drbd_md_io_bio_set);
 	bio_set_dev(bio, bdev->md_bdev);
-# 27 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 27 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_actlog.c.patch"
 # 101 "/scrap/drbd/drbd/drbd_actlog.c"
 	bio->bi_iter.bi_sector = sector;
 	err = -EIO;
@@ -123,10 +123,10 @@ static int _drbd_md_sync_page_io(struct drbd_device *device,
 	bio->bi_private = device;
 	bio->bi_end_io = drbd_md_endio;
 # 107 "/scrap/drbd/drbd/drbd_actlog.c"
-# 33 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
-# 126 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_actlog.c"
+# 33 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_actlog.c.patch"
+# 128 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_actlog.c"
 	bio->bi_opf = op | op_flags;
-# 34 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 34 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_actlog.c.patch"
 # 107 "/scrap/drbd/drbd/drbd_actlog.c"
 
 	if (op != REQ_OP_WRITE && device->disk_state[NOW] == D_DISKLESS && device->ldev == NULL)
@@ -157,10 +157,10 @@ static int _drbd_md_sync_page_io(struct drbd_device *device,
 
 int drbd_md_sync_page_io(struct drbd_device *device, struct drbd_backing_dev *bdev,
 # 136 "/scrap/drbd/drbd/drbd_actlog.c"
-# 42 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
-# 162 "/scrap/drbd/drbd/build-5.15.167-mdl+/drbd_actlog.c"
+# 42 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_actlog.c.patch"
+# 162 "/scrap/drbd/drbd/build-5.15.180-mdl+/drbd_actlog.c"
 			 sector_t sector, unsigned int op)
-# 43 "/scrap/drbd/drbd/build-5.15.167-mdl+/.patches/drbd_actlog.c.patch"
+# 43 "/scrap/drbd/drbd/build-5.15.180-mdl+/.patches/drbd_actlog.c.patch"
 # 136 "/scrap/drbd/drbd/drbd_actlog.c"
 {
 	int err;
@@ -192,7 +192,8 @@ int drbd_md_sync_page_io(struct drbd_device *device, struct drbd_backing_dev *bd
 	return err;
 }
 
-bool drbd_al_active(struct drbd_device *device, sector_t sector, unsigned int size) {
+bool drbd_al_active(struct drbd_device *device, sector_t sector, unsigned int size)
+{
 	unsigned first = sector >> (AL_EXTENT_SHIFT-9);
 	unsigned last = size == 0 ? first : (sector + (size >> 9) - 1) >> (AL_EXTENT_SHIFT-9);
 	unsigned enr;
@@ -658,19 +659,30 @@ int drbd_al_initialize(struct drbd_device *device, void *buffer)
 
 void drbd_advance_rs_marks(struct drbd_peer_device *peer_device, unsigned long still_to_go)
 {
-	unsigned long now = jiffies;
-	unsigned long last = peer_device->rs_mark_time[peer_device->rs_last_mark];
-	int next = (peer_device->rs_last_mark + 1) % DRBD_SYNC_MARKS;
-	if (time_after_eq(now, last + DRBD_SYNC_MARK_STEP)) {
-		if (peer_device->rs_mark_left[peer_device->rs_last_mark] != still_to_go &&
-		    peer_device->repl_state[NOW] != L_PAUSED_SYNC_T &&
-		    peer_device->repl_state[NOW] != L_PAUSED_SYNC_S) {
-			peer_device->rs_mark_time[next] = now;
-			peer_device->rs_mark_left[next] = still_to_go;
-			peer_device->rs_last_mark = next;
-		}
-		drbd_peer_device_post_work(peer_device, RS_PROGRESS);
+	unsigned long now;
+	int next;
+
+	/* report progress and advance marks only if we made progress */
+	if (peer_device->rs_mark_left[peer_device->rs_last_mark] == still_to_go)
+		return;
+
+	/* report progress and advance marks at most once every DRBD_SYNC_MARK_STEP (3 seconds) */
+	now = jiffies;
+	if (!time_after_eq(now, peer_device->rs_last_progress_report_ts + DRBD_SYNC_MARK_STEP))
+		return;
+
+	/* Do not advance marks if we are "paused" */
+	if (peer_device->repl_state[NOW] != L_PAUSED_SYNC_T &&
+	    peer_device->repl_state[NOW] != L_PAUSED_SYNC_S) {
+		next = (peer_device->rs_last_mark + 1) % DRBD_SYNC_MARKS;
+		peer_device->rs_mark_time[next] = now;
+		peer_device->rs_mark_left[next] = still_to_go;
+		peer_device->rs_last_mark = next;
 	}
+
+	/* But still report progress even if paused. */
+	peer_device->rs_last_progress_report_ts = now;
+	drbd_peer_device_post_work(peer_device, RS_PROGRESS);
 }
 
 /* It is called lazy update, so don't do write-out too often. */
