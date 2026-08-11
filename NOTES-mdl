@@ -1,7 +1,7 @@
 -*- org -*-
 
 * TODO
-- OpenZFS 2.3.4 (supports up to 6.16, 6.17 support in 2.4.0-rc, 6.18 should be next LTS)
+- OpenZFS 2.4.3
 - DRBD 9.2.15 (supports up to 6.16, 6.17-rc5 verified so maybe 6.17)
 - play with CONFIG_FW_LOADER_DEBUG! might not need my fw loading patch anymore!
 - Shrink config down more?  My last attempt was disheartening, I cut out all
@@ -15,6 +15,25 @@ Started with my mdl/6.12 .config, see history below.  Walked through 'make
 oldconfig' and accepted most of the defaults.  Unless noted, new drivers got M,
 new features for drivers got Y unless experimental or debug.
 
+- Control Group support
+  - Device memory controller (DMEM) (CGROUP_DMEM) [N/y/?] (NEW) Y
+- Kexec and crash features
+  - kexec handover (KEXEC_HANDOVER) [N/y/?] (NEW) Y
+- Processor type and features
+  - AMD Secure AVIC (AMD_SECURE_AVIC) [N/y/?] (NEW) Y
+  - Intel Trust Domain Extensions (TDX) host support (INTEL_TDX_HOST) [N/y/?] (NEW) Y
+  - Mitigations for CPU vulnerabilities
+    - Mitigate Straight-Line-Speculation (MITIGATION_SLS) [N/y/?] (NEW) Y
+- Memory Management options
+  - Allocate a PMD sized folio for zeroing (PERSISTENT_HUGE_ZERO_FOLIO) [N/y/?] (NEW) Y
+  - CMA information through sysfs interface (CMA_SYSFS) [N/y/?] (NEW) Y
+- Networking options
+  - Netfilter legacy tables support (NETFILTER_XTABLES_LEGACY) [N/y/?] (NEW) Y
+- Security/Memory initialization
+  - Initialize kernel stack variables at function entry
+    - 3. zero-init everything (strongest and safest) (INIT_STACK_ALL_ZERO) (NEW)
+- Cryptographic API
+  - Enable cryptographic self-tests (CRYPTO_SELFTESTS) [N/y/?] (NEW) Y
 
 Then made the following changes:
 
