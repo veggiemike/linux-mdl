@@ -10,7 +10,7 @@ couple longterm series.
 The following upstream projects have been merged in, with compilation problems
 fixed as needed.
 
-NONE YET
+OpenZFS v2.4.3
 
 I've also started controlling my .config in git, to make my life easier.
 
