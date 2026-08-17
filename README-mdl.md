@@ -11,6 +11,7 @@ The following upstream projects have been merged in, with compilation problems
 fixed as needed.
 
 OpenZFS v2.4.3
+DRBD v9.3.3
 
 I've also started controlling my .config in git, to make my life easier.
 
